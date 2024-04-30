@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sound With Time</title>
+  <link rel="stylesheet" href="./style.css">
+  
+  <!-- Include Three.js Core Library -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+
+  <!-- Include Post-Processing Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/AfterimagePass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/AfterimageShader.js"></script>
+
+  <!-- SMAAPass Script -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SMAAPass.js"></script>
+
+  <!-- Include OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- Include Simplex Noise Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+
+  <!-- Include TensorFlow.js Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+</head>
+<body>
+  <div id="scene-container"></div>
+
+<style>
+body {
+  background: #000;
+}
+</style>  
+
+
+<script>
+// Scene setup www.thefanger.com | inadazefarms.com
+const scene = new THREE.Scene();
+
+// Camera setup
+const camera = new THREE.PerspectiveCamera(120, window.innerWidth / window.innerHeight, 0.1, 1000); //175 camera
+// Camera setup for side view
+camera.position.set(0, 5, 0); // Position the camera to the side (adjust the 5 to move the camera further or closer)
+camera.lookAt(new THREE.Vector3(0, 0, 0)); // Keep the camera looking at the center
+
+
+// Renderer setup
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Set Up the Effect Composer
+const composer = new THREE.EffectComposer(renderer);
+const renderPass = new THREE.RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const chromaticAberrationShader = {
+    uniforms: {
+        "tDiffuse": { value: null },
+        "uOffset": { value: new THREE.Vector2(0.0015, 0.00015) } // 0.00015 Adjust the offset values
+    },
+    vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: /* glsl */`
+        uniform sampler2D tDiffuse;
+        uniform vec2 uOffset;
+        varying vec2 vUv;
+        void main() {
+            vec2 uvR = vUv + uOffset;
+            vec2 uvB = vUv - uOffset;
+            gl_FragColor = vec4(texture2D(tDiffuse, uvR).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, uvB).b, 1.0);
+        }
+    `
+};
+
+
+const chromaticAberrationPass = new THREE.ShaderPass(chromaticAberrationShader);
+composer.addPass(chromaticAberrationPass);
+
+// Add Bloom Pass with initial settings
+const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight));
+composer.addPass(bloomPass);
+
+// Update the bloom pass parameters to your desired settings
+bloomPass.strength = 6.6; // Initial value
+bloomPass.radius = 0.20;   // Glow radius
+bloomPass.threshold = 0.1; // Threshold
+
+// Set Up the Afterimage Pass
+const afterimagePass = new THREE.AfterimagePass(0.99); // Adjust the 'damp' parameter as needed
+composer.addPass(afterimagePass);
+
+
+
+// Texture Loader
+const textureLoader = new THREE.TextureLoader();
+
+// Load the circle texture
+const circleTexture = textureLoader.load('https://threejs.org/examples/textures/sprites/circle.png');
+
+const ambientLight = new THREE.AmbientLight(0x0033ff, 0.6);
+scene.add(ambientLight);
+
+
+// Particles setup
+const particlesGeometry = new THREE.BufferGeometry();
+const particlesCnt = 5000; // Number of particles
+const posArray = new Float32Array(particlesCnt * 6); // x,y,z coordinates
+
+for (let i = 0; i < particlesCnt * 3; i++) {
+    posArray[i] = (Math.random() - 0.5) * 5;
+}
+
+particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+// Materials setup
+const particlesMaterial = new THREE.PointsMaterial({
+    size: 0.0025, // 0.015
+    map: circleTexture,
+    transparent: true,
+    blending: THREE.AdditiveBlending
+});
+
+// Mesh
+const particleMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+scene.add(particleMesh);
+
+const colors = [
+    // Sky and Ocean Blues
+ //   new THREE.Color(0x00ccff), // Sky blue
+
+    // Fiery Reds and Pinks
+    new THREE.Color(0xff6347), // Tomato
+    new THREE.Color(0xff4500), // Orange Red
+    new THREE.Color(0xff0000), // Bright Red
+ //   new THREE.Color(0xff69b4), // Hot Pink
+    new THREE.Color(0xff1493), // Deep Pink
+
+    // Vibrant Yellows and Greens
+//    new THREE.Color(0xffff00), // Yellow
+//    new THREE.Color(0xffd700), // Gold
+//    new THREE.Color(0xffa500), // Orange
+ //   new THREE.Color(0x32cd32), // Lime Green
+
+    // Neon and Luminous Colors
+  //  new THREE.Color(0x7fff00), // Chartreuse
+ //   new THREE.Color(0x7fffd4), // Aquamarine
+//    new THREE.Color(0x00ffff), // Aqua
+  //  new THREE.Color(0x00bfff), // Deep Sky Blue
+
+    // Brighter Matrix Green shades
+    new THREE.Color(0x33ff33), // Neon Matrix green
+
+    // Fiery Orange and Flame colors
+ //   new THREE.Color(0xff7f50), // Coral
+
+    // Dynamic Reds
+    new THREE.Color(0xff0000), // Classic Red
+    new THREE.Color(0xff4500), // Orange Red
+    new THREE.Color(0xdc143c), // Crimson
+
+    // Vibrant Purples
+    new THREE.Color(0x800080), // Purple
+
+    // Pure White
+    new THREE.Color(0xffffff), // White
+];
+
+
+// Update the particles material to use vertex colors
+particlesMaterial.vertexColors = true;
+
+// Add color attribute to particles geometry
+const colorsArray = new Float32Array(particlesCnt * 3); // r, g, b for each particle
+
+for (let i = 0; i < particlesCnt; i++) {
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    colorsArray[i * 3] = color.r;
+    colorsArray[i * 3 + 1] = color.g;
+    colorsArray[i * 3 + 2] = color.b;
+}
+
+particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colorsArray, 3));
+
+//above this is bruce color
+
+// Responsive canvas
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Instantiate the SimplexNoise
+const simplex = new SimplexNoise();
+
+// Animation constants
+let gravity = -0.0005; // Initial value
+const velocityArray = new Float32Array(particlesCnt); // Y velocity
+particlesGeometry.setAttribute('velocity', new THREE.BufferAttribute(velocityArray, 1));
+
+// Fibonacci Force Variables
+let fibonacciForceStrength = 1.09; // Initial value Strength of the Fibonacci force 1.05 is badass  .55 is too  .05 is base
+const fibonacciCenter = new THREE.Vector3(0, 0, 0); // Center of the force
+
+// Apply Fibonacci Force
+function applyFibonacciForce() {
+    const positions = particleMesh.geometry.attributes.position.array;
+
+    for (let i = 0; i < positions.length; i += 3) {
+        let particlePosition = new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]);
+        let directionToCenter = fibonacciCenter.clone().sub(particlePosition);
+        let distanceToCenter = directionToCenter.length();
+        let fibonacciAngle = Math.atan2(directionToCenter.z, directionToCenter.x);
+
+        // Apply a spiral force based on distance and angle
+        let spiralX = Math.cos(fibonacciAngle + distanceToCenter * fibonacciForceStrength);
+        let spiralZ = Math.sin(fibonacciAngle + distanceToCenter * fibonacciForceStrength);
+
+        positions[i] += spiralX * fibonacciForceStrength;
+        positions[i + 2] += spiralZ * fibonacciForceStrength;
+    }
+}
+
+// Enhanced Swipe and Explosive Interaction
+let swipeDirectionX = 0, swipeDirectionY = 0;
+let swipeForceMultiplier = 15; // Adjust for dramatic movement
+let explosiveForce = 10.3; // Increased force for the explosion
+let explosiveDecay = 0.85; // Faster decay for a more dynamic effect
+const swipeSmoothness = 0.1; // Smoothing factor
+let isMouseDown = false;
+
+// Common function to update swipe direction
+function updateSwipeDirection() {
+    swipeDirectionX = (touchX - prevTouchX) * swipeSmoothness;
+    swipeDirectionY = (touchY - prevTouchY) * swipeSmoothness;
+}
+
+// Common function to apply directional explosive force
+function applyExplosiveForce() {
+    const positions = particleMesh.geometry.attributes.position.array;
+    for (let i = 0; i < positions.length; i += 3) {
+        // Calculate directional force based on mouse position
+        let directionX = positions[i] - touchX;
+        let directionY = positions[i + 1] - touchY;
+        let directionZ = positions[i + 2] - (1 - touchY); // Adjust Z based on Y for depth
+
+        // Normalize the direction
+        let distance = Math.sqrt(directionX * directionX + directionY * directionY + directionZ * directionZ);
+        directionX /= distance;
+        directionY /= distance;
+        directionZ /= distance;
+
+        // Apply the directional and random force
+        positions[i] += directionX * explosiveForce * (0.5 + Math.random());
+        positions[i + 1] += directionY * explosiveForce * (0.5 + Math.random());
+        positions[i + 2] += directionZ * explosiveForce * (0.5 + Math.random());
+    }
+    explosiveForce *= explosiveDecay; // Decay the explosive force
+}
+
+// Variables to track two fingers for pinch
+let touch1 = { x: 0, y: 0 }, touch2 = { x: 0, y: 0 };
+let initialPinchDistance = null;
+let currentFOV = camera.fov;
+
+// Function to calculate distance between two touch points
+function calculatePinchDistance(touch1, touch2) {
+    return Math.sqrt(Math.pow(touch2.x - touch1.x, 2) + Math.pow(touch2.y - touch1.y, 2));
+}
+
+
+function getPinchDistance(event) {
+    const dx = event.touches[0].pageX - event.touches[1].pageX;
+    const dy = event.touches[0].pageY - event.touches[1].pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+document.addEventListener('touchstart', (event) => {
+    if (event.touches.length === 2) {
+        // Start of a pinch gesture
+        initialPinchDistance = getPinchDistance(event);
+        initialFOV = camera.fov;
+    } else if (event.touches.length === 1) {
+        // Single touch events (like explosive effects)
+        prevTouchX = touchX;
+        prevTouchY = touchY;
+        touchX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+        touchY = - (event.touches[0].clientY / window.innerHeight) * 2 + 1;
+        explosiveForce = 0.1; // Reset explosive force on new interaction
+    }
+}, false);
+
+document.addEventListener('touchmove', (event) => {
+    if (event.touches.length === 2 && initialPinchDistance !== null) {
+        // During a pinch gesture
+        const currentPinchDistance = getPinchDistance(event);
+        const pinchScale = currentPinchDistance / initialPinchDistance;
+        camera.fov = initialFOV / pinchScale;
+        camera.updateProjectionMatrix();
+        event.preventDefault(); // Prevents default pinch zoom action on some browsers
+    } else if (event.touches.length === 1) {
+        // Single touch move events (like swipe for explosive effects)
+        prevTouchX = touchX;
+        prevTouchY = touchY;
+        touchX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+        touchY = - (event.touches[0].clientY / window.innerHeight) * 2 + 1;
+        updateSwipeDirection();
+    }
+}, false);
+
+document.addEventListener('touchend', (event) => {
+    if (event.touches.length < 2) {
+        // End of a pinch gesture
+        initialPinchDistance = null;
+    }
+    // Single touch end events (resetting or completing single touch interactions)
+    isMouseDown = false;
+}, false);
+
+
+// Enhanced swipe application
+function applySwipe() {
+    const positions = particleMesh.geometry.attributes.position.array;
+
+    for (let i = 0; i < positions.length; i += 3) {
+        positions[i] += swipeDirectionX * swipeForceMultiplier; // Amplified horizontal force
+        positions[i + 2] += swipeDirectionY * swipeForceMultiplier; // Amplified vertical force
+    }
+
+    // Reset swipe direction after applying
+    swipeDirectionX = 0;
+    swipeDirectionY = 0;
+
+    // Apply explosive force if needed
+    if (explosiveForce > 0.51) {
+        applyExplosiveForce();
+    }
+}
+
+// Mouse and Touch events setup
+let touchX = 0, touchY = 0, prevTouchX = 0, prevTouchY = 0;
+
+document.addEventListener('mousedown', (event) => {
+    isMouseDown = true;
+    prevTouchX = touchX = (event.clientX / window.innerWidth) * 2 - 1;
+    prevTouchY = touchY = - (event.clientY / window.innerHeight) * 2 + 1;
+    explosiveForce = 0.1; // Reset explosive force on new interaction
+}, false);
+
+document.addEventListener('mouseup', () => {
+    isMouseDown = false;
+}, false);
+
+document.addEventListener('mousemove', (event) => {
+    if (isMouseDown) {
+        prevTouchX = touchX;
+        prevTouchY = touchY;
+        touchX = (event.clientX / window.innerWidth) * 2 - 1;
+        touchY = - (event.clientY / window.innerHeight) * 2 + 1;
+        updateSwipeDirection();
+    }
+}, false);
+
+document.addEventListener('touchstart', (event) => {
+    prevTouchX = touchX;
+    prevTouchY = touchY;
+    touchX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+    touchY = - (event.touches[0].clientY / window.innerHeight) * 2 + 1;
+    explosiveForce = 0.5; // Reset explosive force on new interaction
+}, false);
+
+document.addEventListener('touchmove', (event) => {
+    if (event.touches.length > 0) {
+        prevTouchX = touchX;
+        prevTouchY = touchY;
+        touchX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+        touchY = - (event.touches[0].clientY / window.innerHeight) * 2 + 1;
+        updateSwipeDirection();
+    }
+}, false);
+function regenerateParticle(i, positions, velocities) {
+    // Reset position
+    positions[i] = (Math.random() - 0.5) * 5; // x-coordinate
+    positions[i + 1] = 2.5; // y-coordinate, start above the view
+    positions[i + 2] = (Math.random() - 0.5) * 5; // z-coordinate
+
+    // Reset velocity
+    velocities[i / 3] = 0; // Reset y-velocity
+}
+function checkBoundsAndRegenerate() {
+    const positions = particleMesh.geometry.attributes.position.array;
+    const velocities = particleMesh.geometry.attributes.velocity.array;
+
+    for (let i = 0; i < positions.length; i += 3) {
+        // Define boundaries for x, y, z
+        const maxX = 5, maxY = 5, maxZ = 5;
+        const minX = -5, minY = -5, minZ = -5;
+
+        if (positions[i] > maxX || positions[i] < minX ||
+            positions[i + 1] > maxY || positions[i + 1] < minY ||
+            positions[i + 2] > maxZ || positions[i + 2] < minZ) {
+                regenerateParticle(i, positions, velocities);
+        }
+    }
+}
+document.addEventListener('wheel', (event) => {
+    const zoomSpeed = 0.1; // Control how fast zoom happens
+    camera.fov += event.deltaY * zoomSpeed;
+    camera.updateProjectionMatrix();
+});
+let usePostProcessing = true; // You can toggle this based on performance or preference
+
+//POINT LIGHT ADDED FOR EXTRA EFFECT BELOW THIS LINE 
+
+const pointLight = new THREE.PointLight(0x00ff66, 1, 50);
+scene.add(pointLight);
+
+// Inside mouse event listeners
+pointLight.position.set(touchX * 10, 5, touchY * 10); // Adjust multiplier for broader movement range
+
+//END POINT LIGHT INSERT NO MORE POINT LIGHTS BEYOND THIS LINE
+// 1. Capture Audio Input
+navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    .then(stream => {
+        // 2. Create Audio Context and Analyzer
+        const audioContext = new AudioContext();
+        const analyser = audioContext.createAnalyser();
+        const microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+
+        // Additional setup for analyser
+        analyser.fftSize = 2048;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        // 3. Create a function to analyze audio and update visuals
+        function analyzeAudio() {
+            requestAnimationFrame(analyzeAudio);
+
+            analyser.getByteFrequencyData(dataArray);
+
+            // Process data to determine adjustments
+            let sum = dataArray.reduce((a, b) => a + b, 0);
+            let average = sum / dataArray.length;
+
+            // 4. Map Audio Data to Visual Parameters
+            // Adjust gravity, bloom intensity, Fibonacci force, etc.
+    gravity = mapRange(average, 0, 128, -0.00005, -0.005); 
+    bloomPass.strength = mapRange(average, 0, 128, 1.5, 10.5); 
+    fibonacciForceStrength = mapRange(average, 0, 128, 1.09, 1.30);
+timeMultiplier = mapRange(average, 0, 128, 0.1, 0.01); // Adjust time multiplier based on 
+        }
+
+        // Start the audio analysis
+        analyzeAudio();
+    })
+    .catch(err => {
+        console.error('Microphone access denied:', err);
+    });
+
+// Helper function to map a range of values
+function mapRange(value, inMin, inMax, outMin, outMax) {
+    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+}
+// Animation function
+function animate() {
+    requestAnimationFrame(animate);
+
+let timeMultiplier = 0.0001; // Initial value
+    const positions = particleMesh.geometry.attributes.position.array;
+    const velocities = particleMesh.geometry.attributes.velocity.array;
+    const time = performance.now() * timeMultiplier; // Use dynamic time multiplier
+
+    // Update particles
+    for (let i = 0; i < positions.length; i += 3) {
+        const indexY = i / 3;
+
+        // Noise for organic movement
+        const noiseX = simplex.noise3D(positions[i], positions[i + 1], time) * 3.31;
+        const noiseY = simplex.noise3D(positions[i + 1], positions[i + 2], time) * 0.21;
+        const noiseZ = simplex.noise3D(positions[i + 2], positions[i], time) * 0.11;
+
+        // Apply gravity
+        velocities[indexY] += gravity;
+        positions[i] += noiseX;
+        positions[i + 1] += velocities[indexY] + noiseY;
+        positions[i + 2] += noiseZ;
+
+        // Regenerate particles if they move out of bounds
+        if (positions[i + 1] < -2.5) {
+            regenerateParticle(i, positions, velocities);
+        }
+    }
+
+    // Apply the swipe interaction
+    if (isMouseDown || touchX !== prevTouchX || touchY !== prevTouchY) {
+        applySwipe();
+    }
+
+    // Apply the Fibonacci force approximately 90% of the time
+    if (Math.random() < 1.0) { // 1.0 is best
+        applyFibonacciForce();
+    }
+
+    // Keep particles within boundaries
+    checkBoundsAndRegenerate();
+
+    // Update particle positions and velocities
+    particleMesh.geometry.attributes.position.needsUpdate = true;
+    particleMesh.geometry.attributes.velocity.needsUpdate = true;
+
+    // Slow clockwise rotation of the particle mesh
+    particleMesh.rotation.y += 0.001; // Adjust this value for speed
+
+    // Conditional rendering
+    if (usePostProcessing) {
+        // Render with post-processing
+        composer.render();
+    } else {
+        // Standard rendering without post-processing
+        renderer.render(scene, camera);
+    }
+}
+
+// Initialize animation
+animate();
+</script>  
