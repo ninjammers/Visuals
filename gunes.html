@@ -1,0 +1,66 @@
+<body style='opacity:0' onload='document.getElementsByTagName("body")[0].style.opacity = "1"'>
+
+<div class="banner" onload="this.style.opacity=1">
+  <div class="gunes img-1" style="background-image: url(https://services.swpc.noaa.gov/images/animations/suvi/primary/094/latest.png);"></div>
+  <div class="gunes img-2" style="background-image: url(https://services.swpc.noaa.gov/images/animations/suvi/primary/131/latest.png);" ></div>
+  <div class="gunes img-3" style="background-image: url(https://services.swpc.noaa.gov/images/animations/suvi/primary/304/latest.png);" ></div>	   
+  <div class="gunes img-4" style="background-image: url(https://services.swpc.noaa.gov/images/animations/suvi/primary/171/latest.png);" ></div>
+  <div class="gunes img-5" style="background-image: url(https://services.swpc.noaa.gov/images/animations/suvi/primary/195/latest.png);" ></div>
+  <div class="gunes img-6" style="background-image: url(https://services.swpc.noaa.gov/images/animations/suvi/primary/284/latest.png);"></div> 
+ </div>
+<style>
+
+body {
+	width: 100%;
+	background-color: #000;
+}
+
+
+.banner {   
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+
+.img-1, .img-2, .img-3, .img-4, .img-5, .img-6 {
+	position: absolute;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	background-repeat: no-repeat;
+	background-position: center;
+	z-index: -22;
+	opacity: 0;
+	animation-name: fade;
+	animation-duration: 12s;
+	animation-iteration-count: infinite;
+}
+
+.img-1 { animation-delay: 0s; }
+.img-2 { animation-delay: 2s; }
+.img-3 { animation-delay: 4s; }
+.img-4 { animation-delay: 6s; }
+.img-5 { animation-delay: 8s; }
+.img-6 { animation-delay: 10s; }
+
+
+@keyframes crossfade {
+	00.00%	{ opacity: 0; }
+	06.25%	{ opacity: 1; }
+	25.00%	{ opacity: 1; }
+	31.25%	{ opacity: 0; }
+	100.0%	{ opacity: 0; }
+}
+
+@keyframes fade {
+	00.00%	{ opacity: 0; z-index: -10; }
+	06.25%	{ opacity: 1; z-index: -10; }
+	31.25%	{ opacity: 1; z-index: -12; }
+	37.50%	{ opacity: 0; z-index: -14; }
+	43.50%	{ opacity: 0; z-index: -16; }
+	49.50%	{ opacity: 0; z-index: -18; }	
+	100.0%	{ opacity: 0; z-index: -20; }
+}
+  
+
+</style>
