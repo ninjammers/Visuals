@@ -1,0 +1,366 @@
+<script src="https://cdn.jsdelivr.net/npm/three@0.115.0/examples/js/controls/OrbitControls.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+
+<div id="scene-container"></div>
+
+<style>
+body {
+  background: #000;
+}
+</style>  
+
+ <script>
+// Scene setup
+const scene = new THREE.Scene();
+
+// Camera setup
+const camera = new THREE.PerspectiveCamera(Math.floor(Math.random() * 60) + 30, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 0); // Camera is above looking down at the scene
+camera.lookAt(new THREE.Vector3(0, 0, 0)); // Look at the center of the scene
+
+// Renderer setup
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Texture Loader
+const textureLoader = new THREE.TextureLoader();
+
+// Load the circle texture
+const circleTexture = textureLoader.load('https://threejs.org/examples/textures/sprites/disc.png');
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+scene.add(ambientLight);
+
+// Particles setup
+const particlesGeometry = new THREE.BufferGeometry();
+const particlesCnt = 18000; // Number of particles
+const posArray = new Float32Array(particlesCnt * 3); // x,y,z coordinates
+const colorArray = new Float32Array(particlesCnt * 3); // RGB for each particle
+
+// Color and position setup for each particle
+for (let i = 0; i < particlesCnt * 3; i += 3) {
+    posArray[i] = (Math.random() - 0.5) * 5; // x-coordinate
+    posArray[i + 1] = (Math.random() - 0.5) * 5; // y-coordinate
+    posArray[i + 2] = (Math.random() - 0.5) * 5; // z-coordinate
+
+    let distance = Math.sqrt(posArray[i] ** 2 + posArray[i + 1] ** 2 + posArray[i + 2] ** 2);
+    let maxDistance = Math.sqrt(5 ** 2 + 5 ** 2 + 5 ** 2);
+
+    // Set color based on distance, with center being fiery
+    let hue = distance < 1 ? 0.1 : 0.55 - (distance / maxDistance) * 0.15;
+    let saturation = 1.0;
+    let lightness = distance < 1 ? 0.75 : 0.5 + (distance / maxDistance) * 0.5;
+
+    let color = new THREE.Color().setHSL(hue, saturation, lightness);
+    colorArray[i] = color.r;
+    colorArray[i + 1] = color.g;
+    colorArray[i + 2] = color.b;
+}
+
+particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+
+// Materials setup
+const particlesMaterial = new THREE.PointsMaterial({
+    size: 0.045,
+    map: circleTexture,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true
+});
+
+// Mesh
+const particleMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+scene.add(particleMesh);
+
+// Responsive canvas
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Instantiate the SimplexNoise
+const simplex = new SimplexNoise();
+
+// Animation constants
+
+const velocityArray = new Float32Array(particlesCnt); // Y velocity
+particlesGeometry.setAttribute('velocity', new THREE.BufferAttribute(velocityArray, 1));
+
+// Fibonacci Force Variables
+
+const fibonacciCenter = new THREE.Vector3(0, 0, 0); // Center of the force
+
+// Apply Fibonacci Force
+function applyFibonacciForce() {
+    const positions = particleMesh.geometry.attributes.position.array;
+
+    for (let i = 0; i < positions.length; i += 3) {
+        let particlePosition = new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]);
+        let directionToCenter = fibonacciCenter.clone().sub(particlePosition);
+        let distanceToCenter = directionToCenter.length();
+        let fibonacciAngle = Math.atan2(directionToCenter.z, directionToCenter.x);
+
+        // Apply a spiral force based on distance and angle
+        let spiralX = Math.cos(fibonacciAngle + distanceToCenter * fibonacciForceStrength);
+        let spiralZ = Math.sin(fibonacciAngle + distanceToCenter * fibonacciForceStrength);
+
+        positions[i] += spiralX * fibonacciForceStrength;
+        positions[i + 2] += spiralZ * fibonacciForceStrength;
+    }
+}
+
+// Enhanced Swipe and Explosive Interaction
+let swipeDirectionX = 0, swipeDirectionY = 0;
+let swipeForceMultiplier = 15; // Increase this value for more dramatic movement
+let explosiveForce = 1.1; // Force applied for the 'explosion'
+let explosiveDecay = 0.95; // How quickly the explosive force decays
+const swipeSmoothness = 0.1; // Smoothing factor
+let isMouseDown = false;
+
+// Common function to update swipe direction
+function updateSwipeDirection() {
+    swipeDirectionX = (touchX - prevTouchX) * swipeSmoothness;
+    swipeDirectionY = (touchY - prevTouchY) * swipeSmoothness;
+}
+
+// Common function to apply explosive force
+function applyExplosiveForce() {
+    const positions = particleMesh.geometry.attributes.position.array;
+    for (let i = 0; i < positions.length; i += 3) {
+        positions[i] += (Math.random() - 0.5) * explosiveForce;
+        positions[i + 1] += (Math.random() - 0.5) * explosiveForce;
+        positions[i + 2] += (Math.random() - 0.5) * explosiveForce;
+    }
+    explosiveForce *= explosiveDecay; // Decay the explosive force
+}
+
+// Enhanced swipe application
+function applySwipe() {
+    const positions = particleMesh.geometry.attributes.position.array;
+
+    for (let i = 0; i < positions.length; i += 3) {
+        positions[i] += swipeDirectionX * swipeForceMultiplier; // Amplified horizontal force
+        positions[i + 2] += swipeDirectionY * swipeForceMultiplier; // Amplified vertical force
+    }
+
+    // Reset swipe direction after applying
+    swipeDirectionX = 0;
+    swipeDirectionY = 0;
+
+    // Apply explosive force if needed
+    if (explosiveForce > 0.01) {
+        applyExplosiveForce();
+    }
+}
+
+// Mouse and Touch events setup
+let touchX = 0, touchY = 0, prevTouchX = 0, prevTouchY = 0;
+
+document.addEventListener('mousedown', (event) => {
+    isMouseDown = true;
+    prevTouchX = touchX = (event.clientX / window.innerWidth) * 2 - 1;
+    prevTouchY = touchY = - (event.clientY / window.innerHeight) * 2 + 1;
+    explosiveForce = 0.1; // Reset explosive force on new interaction
+}, false);
+
+document.addEventListener('mouseup', () => {
+    isMouseDown = false;
+}, false);
+
+document.addEventListener('mousemove', (event) => {
+    if (isMouseDown) {
+        prevTouchX = touchX;
+        prevTouchY = touchY;
+        touchX = (event.clientX / window.innerWidth) * 2 - 1;
+        touchY = - (event.clientY / window.innerHeight) * 2 + 1;
+        updateSwipeDirection();
+    }
+}, false);
+
+document.addEventListener('touchstart', (event) => {
+    prevTouchX = touchX;
+    prevTouchY = touchY;
+    touchX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+    touchY = - (event.touches[0].clientY / window.innerHeight) * 2 + 1;
+    explosiveForce = 0.1; // Reset explosive force on new interaction
+}, false);
+
+document.addEventListener('touchmove', (event) => {
+    if (event.touches.length > 0) {
+        prevTouchX = touchX;
+        prevTouchY = touchY;
+        touchX = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+        touchY = - (event.touches[0].clientY / window.innerHeight) * 2 + 1;
+        updateSwipeDirection();
+    }
+}, false);
+function regenerateParticle(i, positions, velocities) {
+    // Reset position
+    positions[i] = (Math.random() - 0.5) * 5; // x-coordinate
+    positions[i + 1] = 2.5; // y-coordinate, start above the view
+    positions[i + 2] = (Math.random() - 0.5) * 5; // z-coordinate
+
+    // Reset velocity
+    velocities[i / 3] = 0; // Reset y-velocity
+}
+
+
+function checkBoundsAndRegenerate() {
+    const positions = particleMesh.geometry.attributes.position.array;
+    const velocities = particleMesh.geometry.attributes.velocity.array;
+
+    for (let i = 0; i < positions.length; i += 3) {
+        // Define boundaries for x, y, z
+        const maxX = 5, maxY = 5, maxZ = 5;
+        const minX = -5, minY = -5, minZ = -5;
+
+        if (positions[i] > maxX || positions[i] < minX ||
+            positions[i + 1] > maxY || positions[i + 1] < minY ||
+            positions[i + 2] > maxZ || positions[i + 2] < minZ) {
+                regenerateParticle(i, positions, velocities);
+        }
+    }
+}
+// Define the audio context globally so it's accessible throughout the script
+let audioContext;
+let analyser;
+let dataArray;
+
+// Function to initialize the Web Audio API and analyser
+function initAudio() {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function(stream) {
+            audioContext = new AudioContext();
+            const microphone = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+
+            analyser.fftSize = 2048;
+            let bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+
+            microphone.connect(analyser);
+        })
+        .catch(function(err) {
+            console.error('Access to the microphone was denied!', err);
+            // Implement a user-friendly notification here
+            // For example: alert("Microphone access denied. The visualization won't react to sound.");
+        });
+}
+
+// Call the initAudio function to set up the audio input
+initAudio();
+
+// Constants for sound-driven forces
+const baseFibonacciForceStrength = 0.005;
+const forceScaleFactor = 0.1; // 0.11 is base
+const baseGravity = -0.005;
+const gravityScaleFactor = 0.0001;
+
+// Map the frequency data to a force value
+function getSoundIntensity() {
+    analyser.getByteFrequencyData(dataArray);
+    let sum = dataArray.reduce((a, value) => a + value, 0);
+    let intensity = sum / dataArray.length;
+    return intensity / 4.00; // Normalize intensity 8 is best
+}
+
+function applyFibonacciForceWithSound() {
+    // Check if particleMesh and its geometry's position attribute are defined
+    if (!particleMesh || !particleMesh.geometry || !particleMesh.geometry.attributes.position) {
+        console.error('Particle mesh or its geometry is not properly defined.');
+        return; // Exit the function if the required objects are not set up
+    }
+
+    const positions = particleMesh.geometry.attributes.position.array;
+    const fibonacciCenter = new THREE.Vector3(0, 0, 0);
+
+    for (let i = 0; i < positions.length; i += 3) {
+        let particlePosition = new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]);
+        let directionToCenter = fibonacciCenter.clone().sub(particlePosition);
+        let distanceToCenter = directionToCenter.length();
+        let fibonacciAngle = Math.atan2(directionToCenter.z, directionToCenter.x);
+
+        let spiralForce = fibonacciForceStrength + distanceToCenter * forceScaleFactor;
+
+        positions[i] += Math.cos(fibonacciAngle + distanceToCenter * spiralForce) * spiralForce;
+        positions[i + 1] += (positions[i + 1] < fibonacciCenter.y) ? Math.abs(spiralForce) : -Math.abs(spiralForce); // This adds a vertical oscillation
+        positions[i + 2] += Math.sin(fibonacciAngle + distanceToCenter * spiralForce) * spiralForce;
+    }
+
+    // Mark the positions as needing an update
+    particleMesh.geometry.attributes.position.needsUpdate = true;
+}
+
+// Animation function
+// Make sure these are declared with 'let' if their values change during runtime
+let fibonacciForceStrength = baseFibonacciForceStrength; // Adjust this initial value as needed
+let gravity = baseGravity; // Adjust this initial value as needed
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    const time = performance.now() * 0.00001;
+    const positions = particleMesh.geometry.attributes.position.array;
+    const velocities = particleMesh.geometry.attributes.velocity.array;
+
+    // Update sound intensity and modify forces accordingly
+    if (audioContext && analyser) {
+        let soundIntensity = getSoundIntensity();
+        fibonacciForceStrength = baseFibonacciForceStrength + soundIntensity * forceScaleFactor;
+        gravity = baseGravity - soundIntensity * gravityScaleFactor;
+    }
+
+    for (let i = 0; i < positions.length; i += 3) {
+        const indexY = i / 3;
+
+        // Noise for organic movement
+        const noiseX = simplex.noise3D(positions[i], positions[i + 1], time) * 1.05;
+        const noiseY = simplex.noise3D(positions[i + 1], positions[i + 2], time) * 0.05;
+        const noiseZ = simplex.noise3D(positions[i + 2], positions[i], time) * 0.05;
+
+        // Apply gravity affected by sound
+        velocities[indexY] += gravity;
+        positions[i] += noiseX;
+        positions[i + 1] += velocities[indexY] + noiseY;
+        positions[i + 2] += noiseZ;
+
+        // Regenerate particles if they move out of bounds
+        if (positions[i + 1] < -2.5) {
+            regenerateParticle(i, positions, velocities);
+        }
+    }
+
+    // Apply the swipe interaction
+    if (isMouseDown || touchX !== prevTouchX || touchY !== prevTouchY) {
+        applySwipe();
+    }
+
+    // Apply the Fibonacci force with sound adjustment
+    applyFibonacciForceWithSound();
+
+    // Keep particles within boundaries
+    checkBoundsAndRegenerate();
+
+    // Update particle positions and velocities
+    particleMesh.geometry.attributes.position.needsUpdate = true;
+    particleMesh.geometry.attributes.velocity.needsUpdate = true;
+
+    // Render the scene
+    renderer.render(scene, camera);
+}
+
+// Start the animation
+animate();
+
+   
+</script>   
+
+  
