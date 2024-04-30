@@ -1,0 +1,74 @@
+<canvas id="canvas"></canvas>
+<style>
+body, html {
+  margin: 0;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  cursor: pointer;
+}
+</style>
+
+<script>
+/*
+  Johan Karlsson, 2021
+  https://twitter.com/DonKarlssonSan
+  MIT License, see Details View
+*/
+
+let canvas;
+let ctx;
+let w, h;
+let angleStep;
+let lengthStep;
+let rotationFactor;
+
+function setup() {
+  canvas = document.querySelector("#canvas");
+  ctx = canvas.getContext("2d");
+  resize();
+  window.addEventListener("resize", () => {
+    resize();
+    draw();
+  });
+  canvas.addEventListener("click", draw);
+}
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+
+function drawPattern(x, y, angle, length, iteration) {
+  if(iteration < 0) return;
+  
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle * rotationFactor);
+  ctx.strokeRect(-length/2, -length/2, length, length);
+  ctx.restore();
+  
+  let x1 = Math.cos(angle) * length + x;
+  let y1 = Math.sin(angle) * length + y;
+  drawPattern(x1, y1, angle + angleStep, length + lengthStep, iteration - 1);
+}
+
+function draw() {
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, w, h);
+  let direction = Math.random() > 0.5 ? -1 : 1;
+  angleStep = (Math.random() + 0.05) * direction;
+  lengthStep = Math.random() * 0.2 + 0.1;
+  rotationFactor = Math.random() / 2 + 0.75;
+  drawPattern(w / 2, h / 2, 0, 0.5, 1000);
+}
+
+setup();
+draw();
+
+setInterval(function(){
+document.getElementById("canvas").click();
+}, 4000);  
+</script>  
