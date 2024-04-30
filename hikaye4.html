@@ -1,0 +1,205 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r118/three.min.js" type="text/javascript"></script>
+
+<script src="https://threejs.org/examples/js/loaders/RGBELoader.js" type="text/javascript"></script>
+
+<style>
+canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+</style>
+<script>
+  
+  /*
+forked
+original:
+Copyright (c) 2023 by Brandel Zachernuk (https://codepen.io/zachernuk/pen/aQyeXQ)
+*/
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+renderer.setSize(innerWidth, innerHeight);
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(
+  45,
+  innerWidth / innerHeight,
+  0.1,
+  100
+);
+
+camera.position.z = -6;
+camera.position.x = -6;
+camera.position.y = Math.floor(Math.random() * 30) + 1;
+camera.lookAt(scene.position);
+
+requestAnimationFrame(update);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100, 200, 400),
+  new THREE.MeshStandardMaterial({ color: "green", roughness: 0.8 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.geometry.vertices.forEach((v) => (v.z += Math.random() / 10));
+ground.geometry.computeFlatVertexNormals();
+ground.receiveShadow = true;
+
+function Tree() {
+  const treeTrunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.1, 1, 6),
+    new THREE.MeshStandardMaterial({ color: "brown" })
+  );
+  scene.add(treeTrunk);
+  treeTrunk.geometry.computeFlatVertexNormals();
+  treeTrunk.castShadow = true;
+  treeTrunk.receiveShadow = true;
+  treeTrunk.position.y += 0.5;
+  renderer.shadowMap.enabled = true;
+
+  const treeCone = new THREE.Mesh(
+    new THREE.CylinderGeometry(0, 0.4, 1, 6, 5),
+    new THREE.MeshStandardMaterial({
+      color: 0x10a030,
+      metalness: 0.2,
+      roughness: 0.4
+    })
+  );
+  treeTrunk.add(treeCone);
+  treeCone.material.color.g -= Math.random() * 0.1;
+  treeCone.material.color.b += Math.random() * 0.1;
+  treeCone.geometry.vertices.forEach((v) => {
+    return v.multiplyScalar(1 + 0.4 * Math.random());
+  });
+  treeCone.geometry.computeFlatVertexNormals();
+
+  treeCone.castShadow = true;
+  treeCone.position.y += 0.5;
+  const tip = treeCone.clone();
+  tip.rotation.y = Math.random() * 10;
+  treeCone.add(tip);
+  return treeTrunk;
+}
+
+for (var i = 0; i < 10; i++) {
+  const tree = Tree();
+  tree.position.x = Math.random() * 10 - 5;
+  tree.position.z = Math.random() * 10 - 5;
+}
+for (var i = 0; i < 30; i++) {
+  const rock = Rock();
+  rock.position.x = Math.random() * 10 - 5;
+  rock.position.z = Math.random() * 10 - 5;
+}
+
+function Rock() {
+  const rock = new THREE.Mesh(
+    new THREE.SphereGeometry(0.3, 4, 4),
+    new THREE.MeshStandardMaterial({ color: "gray" })
+  );
+
+  scene.add(rock);
+
+  rock.geometry.vertices.forEach((v) => {
+    return v.multiplyScalar(1 + 0.4 * Math.random() * 1.5);
+  });
+
+  rock.receiveShadow = rock.castShadow = true;
+  rock.scale.multiplyScalar(0.1 + Math.random());
+
+  rock.geometry.computeFlatVertexNormals();
+  rock.rotation.x = Math.random() * 100;
+  rock.rotation.z = Math.random() * 100;
+  return rock;
+}
+
+function WagonWheel() {
+  const top = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.9, 1, 0.001, 12, 1, true),
+    new THREE.MeshStandardMaterial({ color: "brown", wireframe: false })
+  );
+  top.position.y = 0.15;
+  top.position.x = Math.random() * 100 - 5;
+  top.position.z = Math.random() * 100 - 5;
+  top.rotation.x = Math.PI / 7;
+  scene.add(top);
+
+  const outer = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1, 0.1, 12, 1, true),
+    top.material
+  );
+  outer.position.y = -0.05;
+  outer.geometry.computeFlatVertexNormals();
+  top.add(outer);
+
+  const inner = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.9, 1.9, -0.1, 12, 1, true),
+    top.material
+  );
+  inner.position.y = -0.05;
+  inner.geometry.computeFlatVertexNormals();
+  top.add(inner);
+
+  for (var i = 0; i < 12; i++) {
+    const pivot = new THREE.Object3D();
+
+    const spoke = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.05, 0.47),
+      top.material
+    );
+    pivot.position.y -= 0.15;
+    pivot.rotation.y = (i / 12) * Math.PI * 2;
+    spoke.position.z = 0.15;
+    top.add(pivot);
+    pivot.add(spoke);
+  }
+  top.traverse((e) => (e.castShadow = e.receiveShadow = true));
+
+  top.scale.multiplyScalar(0.6);
+}
+
+for (var i = 0; i < 3; i++) WagonWheel();
+
+const sun = new THREE.DirectionalLight(0xffffff, 84);
+scene.add(sun);
+sun.shadow.far = 5000;
+sun.position.x = -2;
+sun.position.multiplyScalar(1000);
+
+sun.castShadow = true;
+scene.add(ground);
+scene.add(new THREE.GridHelper(10, 10));
+initHDR2();
+
+function initHDR2() {
+  renderer.physicallyCorrectLights = true;
+  renderer.toneMapping = THREE.LinearToneMapping;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMappingExposure = 0.02;
+
+  new THREE.RGBELoader()
+    .setDataType(THREE.HalfFloatType)
+    .setPath("https://threejs.org/examples/textures/equirectangular/")
+    .load("royal_esplanade_1k.hdr", (texture) => {
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+      pmremGenerator.compileEquirectangularShader();
+      const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+      // this.scene.background = envMap;
+      scene.environment = envMap;
+      worldEnvMap = envMap;
+      texture.dispose();
+      pmremGenerator.dispose();
+    });
+}
+
+function update() {
+  scene.rotation.y += 0.0006;
+  renderer.render(scene, camera);
+
+  requestAnimationFrame(update);
+}
+
+</script>  
