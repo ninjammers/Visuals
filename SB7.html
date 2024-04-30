@@ -1,0 +1,284 @@
+
+
+<canvas id="canvas" title=""></canvas>
+<style>
+body, html {
+  margin: 0;
+}
+
+canvas {
+  display: block;
+  background-color: black;
+}
+
+</style>
+
+<script>
+/* 
+  Johan Karlsson (DonKarlssonSan) 2021
+  https://twitter.com/DonKarlssonSan
+  
+  Physics using verlet integration.
+  Math from Coding Math by Keith Peters.
+  
+  Coding Math: Episode 36 - Verlet Integration Part I
+  Coding Math: Episode 37 - Verlet Integration Part II
+  Coding Math: Episode 38 - Verlet Integration Part III
+  Coding Math: Episode 39 - Verlet Integration Part IV
+*/
+
+let settings = {
+  gravity: 0.2,
+  friction: 0.001,
+  rigidness: 20,
+  tearable: true
+};
+
+class World {
+  constructor () {
+    this.canvas = document.getElementById("canvas");
+    this.ctx = canvas.getContext("2d");
+    this.cellSize = 2;
+    this.resize();
+    
+    // Low bounciness
+    this.bounce = 0.1;
+    
+    this.setupEventListers();
+    this.prevMousePos = { x: 0, y: 0 };
+  }
+  
+  setupPointsInGrid() {
+    this.startingPoints = [];
+    this.sticks = [];
+    this.points = [];
+    let startX = (this.w - this.width * this.cellSize) / 2;
+    let startY = 0; 
+    let i = 0;
+    for(let y = 0; y < 100; y++) {
+      for(let x = 0; x < 100; x++) {
+        this.points.push({
+          x: startX + x * this.cellSize,
+          y: startY + y * this.cellSize,
+          oldx: startX + x * this.cellSize,
+          oldy: startY + y * this.cellSize
+        });
+        if(x > 0) {
+          this.sticks.push({
+            p0: this.points[i-1],
+            p1: this.points[i],
+            length: this.distance(
+              this.points[i-1], 
+              this.points[i]),
+          });
+        }
+        i++
+      }
+      let index = this.points.length - 1;
+      let p = this.points[index];
+      p.pinned = true;
+      this.startingPoints.push(p);    
+    }  
+  }
+    
+  puff() {
+    this.points.forEach(p => p.oldx -= 1);
+  }
+  
+  setupEventListers() {
+    this.canvas.addEventListener(
+      "mousedown",
+      event => this.onMouseDown(event));
+    this.onMouseMove = this.onMouseMove.bind(this);
+    this.canvas.addEventListener("mousemove", this.onMouseMove);
+    this.onMouseUp = this.onMouseUp.bind(this);
+    this.canvas.addEventListener("mouseleave", () => this.onMouseLeave());
+    this.canvas.addEventListener("mouseup", this.onMouseUp);
+    window.addEventListener("resize", () => this.resize());
+  }
+      
+  resize() {
+    this.h = this.canvas.height = window.innerHeight;
+    this.w = this.canvas.width = window.innerWidth;
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeStyle = "white";
+    this.ctx.lineCap = "round";
+    this.width = Math.round(this.w * 0.8 / this.cellSize);
+    this.height = Math.round(this.h * 0.33 / this.cellSize);
+
+    this.setupPointsInGrid();
+    this.puff();
+
+    this.isDragging = false;
+    this.dragPoints = [];
+  }
+  
+  onMouseLeave() {
+    this.onMouseUp();
+  }
+  
+  onMouseDown(event) {
+    let x = event.clientX;
+    let y = event.clientY;
+    let p0 = { x: x, y: y };
+    let closePoints = this.getPointsCloseTo(p0, 30);
+    if(closePoints.length > 0) {
+      this.dragPoints = closePoints;
+      this.dragPoints.forEach(p => {
+        p.x = x;
+        p.y = y;
+        p.oldx = x;
+        p.oldy = y;
+        p.pinned = true;
+      });
+      this.isDragging = true;
+    }
+  }
+  
+  onMouseMove(event) {
+    let x = event.clientX;
+    let y = event.clientY;
+    if(this.isDragging) {
+      this.dragPoints.forEach(p => {
+        p.oldx = p.x;
+        p.oldy = p.y;
+        p.x = x;
+        p.y = y;
+      });
+    } else {
+      let dx = this.prevMousePos.x - x;
+      let dy = this.prevMousePos.y - y;
+      let p0 = { x: x, y: y };
+      let closePoints = this.getPointsCloseTo(p0, 30);
+      closePoints.forEach(p => {
+        p.oldy += dx*2;
+        p.oldx += dy*2;
+      });
+      this.prevMousePos.x = x;
+      this.prevMousePos.y = y;
+    }
+  }
+
+  onMouseUp(event) {
+    this.dragPoints.forEach(p => {
+      p.pinned = false;
+    });
+    this.isDragging = false;
+  }
+  
+  getPointsCloseTo(p0, r) {
+    return this.points.filter(p1 => this.distance(p0, p1) <= r);
+  }
+  
+  distance(p0, p1) {
+    return Math.hypot(p1.x - p0.x, p1.y - p0.y);
+  }
+  
+  update() {
+    this.ctx.clearRect(0, 0, this.w, this.h);
+    this.updatePoints();
+    let i = settings.rigidness;
+    while(i--) {
+      this.updateSticks();
+      this.constrainPoints();
+    }
+    this.drawSticks();
+  }
+  
+  drawSticks() {
+    this.ctx.beginPath();
+    this.sticks.forEach(s => {
+      this.ctx.moveTo(s.p0.x, s.p0.y);
+      this.ctx.lineTo(s.p1.x, s.p1.y);     
+    });    
+    this.ctx.stroke();
+  }
+  
+  updatePoints() {
+    let t = Date.now();
+    let offsetAngle = t / 400;
+    let len = this.startingPoints.length;
+    let r = Math.min(this.w, this.h) * 0.08;
+    for(let i = 0; i < len; i++) {
+      let angle = Math.PI * 2 * i / len + offsetAngle;
+      let x = Math.cos(angle) * r + this.w / 2;
+      let y = Math.sin(angle) * r + this.h / 2;
+      let p = this.startingPoints[i];
+      p.x = x;
+      p.y = y;
+    }
+    this.points.forEach(p => {
+      if(!p.pinned) {
+        let vx = (p.x - p.oldx) * (1 - settings.friction);
+        let vy = (p.y - p.oldy) * (1 - settings.friction);
+        p.oldx = p.x;
+        p.oldy = p.y;
+        // High ground friction
+        if(p.y > this.h - 1) {
+          vx *= 0.2;
+        }
+        p.x += vx;
+        p.y += vy;
+        p.y += settings.gravity;
+      }
+    });
+  }
+  
+  updateSticks() {
+    this.sticks.forEach(s => {
+      let dx = s.p1.x - s.p0.x;
+      let dy = s.p1.y - s.p0.y;
+      let dist = Math.hypot(dx, dy);
+      let diff = s.length - dist;
+      let percent = diff / dist / 2;
+      let offsetX = dx * percent;
+      let offsetY = dy * percent;
+      if(!s.p0.pinned) {
+        s.p0.x -= offsetX;
+        s.p0.y -= offsetY;
+      }
+      if(!s.p1.pinned) {
+        s.p1.x += offsetX;
+        s.p1.y += offsetY;
+      }
+    });
+  }
+  
+  constrainPoints() {
+    this.points.forEach(p => {
+      if(!p.pinned) {
+        let vx = (p.x - p.oldx) * (1 - settings.friction);
+        let vy = (p.y - p.oldy) * (1 - settings.friction);
+        if(p.x > this.w) {
+          p.x = this.w;
+          p.oldx = p.x + vx * this.bounce;
+        }
+        if(p.x < 0) {
+          p.x = 0;
+          p.oldx = vx * this.bounce;
+        }
+        if(p.y > this.h) {
+          p.y = this.h;
+          p.oldy = p.y + vy * this.bounce;
+        }
+        if(p.y < 0) {
+          p.y = 0;
+          p.oldy = vy * this.bounce;
+        }
+      }
+    });
+  }
+}
+
+let world = new World();
+
+function animate() {  
+  world.update();
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+
+ 
+</script>  
