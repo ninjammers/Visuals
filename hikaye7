@@ -1,0 +1,291 @@
+<script src="https://cdn.jsdelivr.net/npm/three@0.113.0/build/three.min.js" type="text/javascript"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.113.0/examples/js/controls/OrbitControls.js" type="text/javascript"></script>
+
+<canvas id="canvas"></canvas>
+
+<style>
+* {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  margin: 0;
+  padding: 0;
+}
+body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  font: 13px/140% Arial, sans-serif;
+  background: #000;
+  color: black;
+}
+canvas {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  background: #000;
+}
+a {
+  color: inherit;
+  cursor: pointer;
+}
+#help {
+  position: fixed;
+  bottom: 0.5vw;
+  right: 0.5vw;
+  color: white;
+  overflow: auto;
+  z-index: 9999;
+}
+
+</style>
+
+<script>
+function e(e) {
+    return new Promise(t => {
+        new THREE.FileLoader().load(e, e => {
+            t(e);
+        });
+    });
+}
+
+const t = document.getElementById("canvas"), a = window.innerWidth, r = window.innerHeight;
+
+let s;
+
+const n = new THREE.Color("black"), i = new THREE.Color("black");
+
+e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/utils.glsl").then(h => {
+    function o() {
+        b.stepSimulation(c), b.updateNormals(c);
+        const e = b.texture.texture;
+        _.update(c, e);
+        const t = _.texture.texture;
+        c.setRenderTarget(null), c.setClearColor(i, 1), c.clear(), T.draw(c, e, t), v.draw(c, e, t), 
+        s.update(), window.requestAnimationFrame(o);
+    }
+    function l(e) {
+        const s = t.getBoundingClientRect();
+        f.x = 2 * (e.clientX - s.left) / a - 1, f.y = 2 * -(e.clientY - s.top) / r + 1, 
+        w.setFromCamera(f, u);
+        const n = w.intersectObject(E);
+        for (let e of n) b.addDrop(c, e.point.x, e.point.z, .06, .04);
+    }
+    function d() {
+        u.aspect = window.innerWidth / window.innerHeight, u.updateProjectionMatrix(), c.setSize(window.innerWidth, window.innerHeight);
+    }
+    THREE.ShaderChunk.utils = h;
+    const u = new THREE.PerspectiveCamera(Math.floor(Math.random() * 80) + 20, a / r, .01, 100);
+    u.position.set(0, -.6, -2), u.rotation.set(0, 0, 0);
+    const c = new THREE.WebGLRenderer({
+        canvas: t,
+        antialias: !0,
+        alpha: !0
+    });
+    c.setPixelRatio(window.devicePixelRatio), c.setSize(a, r), c.autoClear = !1;
+    const m = [ .3, .5, -.3 ];
+    (s = new THREE.OrbitControls(u, c.domElement)).autoRotate = 1, s.autoRotateSpeed = 1, 
+    s.enableDamping = !0, s.enablePan = !1, s.minDistance = .1, s.maxDistance = 20, 
+    s.minPolarAngle = 0, s.maxPolarAngle = Math.PI / 2, s.target.set(0, -.6, 0), s.update();
+    const w = new THREE.Raycaster(), f = new THREE.Vector2(), g = new THREE.PlaneGeometry(2, 2);
+    for (let e of g.vertices) e.z = -e.y, e.y = 0;
+    const E = new THREE.Mesh(g), R = new THREE.CubeTextureLoader().load([ "https://martinRenou.github.io/threejs-water/xpos.jpg", "https://martinRenou.github.io/threejs-water/xneg.jpg", "https://martinRenou.github.io/threejs-water/ypos.jpg", "https://martinRenou.github.io/threejs-water/ypos.jpg", "https://martinRenou.github.io/threejs-water/zpos.jpg", "https://martinRenou.github.io/threejs-water/zneg.jpg" ]), p = new THREE.TextureLoader().load("https://martinRenou.github.io/threejs-water/tiles.jpg"), b = new class {
+        constructor() {
+            this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 2e3), this._geometry = new THREE.PlaneGeometry(10, 10), 
+            this._textureA = new THREE.WebGLRenderTarget(256, 256, {
+                type: THREE.FloatType
+            }), this._textureB = new THREE.WebGLRenderTarget(256, 256, {
+                type: THREE.FloatType
+            }), this.texture = this._textureA;
+            const t = [ e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/simulation/vertex.glsl"), e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/simulation/drop_fragment.glsl"), e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/simulation/normal_fragment.glsl"), e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/simulation/update_fragment.glsl") ];
+            this.loaded = Promise.all(t).then(([e, t, a, r]) => {
+                const s = new THREE.RawShaderMaterial({
+                    uniforms: {
+                        center: {
+                            value: [ 0, 0 ]
+                        },
+                        radius: {
+                            value: 0
+                        },
+                        strength: {
+                            value: 0
+                        },
+                        texture: {
+                            value: null
+                        }
+                    },
+                    vertexShader: e,
+                    fragmentShader: t
+                }), n = new THREE.RawShaderMaterial({
+                    uniforms: {
+                        delta: {
+                            value: [ 1 / 256, 1 / 256 ]
+                        },
+                        texture: {
+                            value: null
+                        }
+                    },
+                    vertexShader: e,
+                    fragmentShader: a
+                }), i = new THREE.RawShaderMaterial({
+                    uniforms: {
+                        delta: {
+                            value: [ 1 / 256, 1 / 256 ]
+                        },
+                        texture: {
+                            value: null
+                        }
+                    },
+                    vertexShader: e,
+                    fragmentShader: r
+                });
+                this._dropMesh = new THREE.Mesh(this._geometry, s), this._normalMesh = new THREE.Mesh(this._geometry, n), 
+                this._updateMesh = new THREE.Mesh(this._geometry, i);
+            });
+        }
+        addDrop(e, t, a, r, s) {
+            this._dropMesh.material.uniforms.center.value = [ t, a ], this._dropMesh.material.uniforms.radius.value = r, 
+            this._dropMesh.material.uniforms.strength.value = s, this._render(e, this._dropMesh);
+        }
+        stepSimulation(e) {
+            this._render(e, this._updateMesh);
+        }
+        updateNormals(e) {
+            this._render(e, this._normalMesh);
+        }
+        _render(e, t) {
+            const a = this.texture, r = this.texture === this._textureA ? this._textureB : this._textureA;
+            t.material.uniforms.texture.value = a.texture, e.setRenderTarget(r), e.render(t, this._camera), 
+            this.texture = r;
+        }
+    }(), T = new class {
+        constructor() {
+            this.geometry = new THREE.PlaneGeometry(2, 2, 100, 100);
+            const t = [ e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/water/vertex.glsl"), e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/water/fragment.glsl") ];
+            this.loaded = Promise.all(t).then(([e, t]) => {
+                this.material = new THREE.RawShaderMaterial({
+                    uniforms: {
+                        light: {
+                            value: m
+                        },
+                        tiles: {
+                            value: p
+                        },
+                        sky: {
+                            value: R
+                        },
+                        water: {
+                            value: null
+                        },
+                        causticTex: {
+                            value: null
+                        },
+                        underwater: {
+                            value: !1
+                        }
+                    },
+                    vertexShader: e,
+                    fragmentShader: t
+                }), this.mesh = new THREE.Mesh(this.geometry, this.material);
+            });
+        }
+        draw(e, t, a) {
+            this.material.uniforms.water.value = t, this.material.uniforms.causticTex.value = a, 
+            this.material.side = THREE.FrontSide, this.material.uniforms.underwater.value = !0, 
+            e.render(this.mesh, u), this.material.side = THREE.BackSide, this.material.uniforms.underwater.value = !1, 
+            e.render(this.mesh, u);
+        }
+    }(), _ = new class {
+        constructor(t) {
+            this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 2e3), this._geometry = t, 
+            this.texture = new THREE.WebGLRenderTarget(1024, 1024, {
+                type: THREE.UNSIGNED_BYTE
+            });
+            const a = [ e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/caustics/vertex.glsl"), e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/caustics/fragment.glsl") ];
+            this.loaded = Promise.all(a).then(([e, t]) => {
+                const a = new THREE.RawShaderMaterial({
+                    uniforms: {
+                        light: {
+                            value: m
+                        },
+                        water: {
+                            value: null
+                        }
+                    },
+                    vertexShader: e,
+                    fragmentShader: t
+                });
+                this._causticMesh = new THREE.Mesh(this._geometry, a);
+            });
+        }
+        update(e, t) {
+            this._causticMesh.material.uniforms.water.value = t, e.setRenderTarget(this.texture), 
+            e.setClearColor(n, 0), e.clear(), e.render(this._causticMesh, this._camera);
+        }
+    }(T.geometry), v = new class {
+        constructor() {
+            this._geometry = new THREE.BufferGeometry();
+            const t = new Float32Array([ -1, -1, -1, -1, -1, 1, -1, 1, -1, -1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, -1, -1, -1, 1, -1, -1, -1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, 1, 1, 1, -1, 1, 1, 1, -1, -1, -1, -1, 1, -1, 1, -1, -1, 1, 1, -1, -1, -1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1 ]), a = new Uint32Array([ 0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7, 12, 13, 14, 14, 13, 15, 16, 17, 18, 18, 17, 19, 20, 21, 22, 22, 21, 23 ]);
+            this._geometry.setAttribute("position", new THREE.BufferAttribute(t, 3)), this._geometry.setIndex(new THREE.BufferAttribute(a, 1));
+            const r = [ e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/pool/vertex.glsl"), e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/pool/fragment.glsl") ];
+            this.loaded = Promise.all(r).then(([e, t]) => {
+                this._material = new THREE.RawShaderMaterial({
+                    uniforms: {
+                        light: {
+                            value: m
+                        },
+                        tiles: {
+                            value: p
+                        },
+                        water: {
+                            value: null
+                        },
+                        causticTex: {
+                            value: null
+                        }
+                    },
+                    vertexShader: e,
+                    fragmentShader: t
+                }), this._material.side = THREE.FrontSide, this._mesh = new THREE.Mesh(this._geometry, this._material);
+            });
+        }
+        draw(e, t, a) {
+            this._material.uniforms.water.value = t, this._material.uniforms.causticTex.value = a, 
+            e.render(this._mesh, u);
+        }
+    }(), x = new class {
+        constructor() {
+            this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 1), this._geometry = new THREE.PlaneGeometry();
+            const t = [ e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/debug/vertex.glsl"), e("https://rawcdn.githack.com/martinRenou/threejs-water/4d64f76fdb12224ea5a4b698fc2c0c75bff8058a/shaders/debug/fragment.glsl") ];
+            this.loaded = Promise.all(t).then(([e, t]) => {
+                this._material = new THREE.RawShaderMaterial({
+                    uniforms: {
+                        texture: {
+                            value: null
+                        }
+                    },
+                    vertexShader: e,
+                    fragmentShader: t
+                }), this._mesh = new THREE.Mesh(this._geometry, this._material);
+            });
+        }
+        draw(e, t) {
+            this._material.uniforms.texture.value = t, e.setRenderTarget(null), e.render(this._mesh, this._camera);
+        }
+    }(), H = [ b.loaded, _.loaded, T.loaded, v.loaded, x.loaded ];
+    Promise.all(H).then(() => {
+        t.addEventListener("mousemove", {
+            handleEvent: l
+        });
+        for (var e = 0; e < 20; e++) b.addDrop(c, 2 * Math.random() - 1, 2 * Math.random() - 1, .06, 1 & e ? .02 : -.02);
+        o(), window.addEventListener("resize", d);
+    });
+});
+</script>
