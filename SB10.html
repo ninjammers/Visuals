@@ -1,0 +1,189 @@
+<script src="https://codepen.io/DonKarlssonSan/pen/bLGjLm.js" type="text/javascript"></script>
+
+<script src="https://codepen.io/DonKarlssonSan/pen/JreEJO.js" type="text/javascript"></script>
+
+
+<canvas id="canvas"></canvas>
+<style>
+body, html {
+  margin: 0;
+}
+
+canvas {
+  display: block;
+  cursor: pointer;
+}
+</style>
+<script>
+/*
+  Johan Karlsson, 2020
+  https://twitter.com/DonKarlssonSan
+  MIT License, see Details View
+*/
+
+class Particle {
+  constructor(x, y) {
+    this.pos = new Vector(x, y);
+    //this.vel = new Vector(Math.random() - 0.5, Math.random() - 0.5);
+    //this.vel.mult(0.05);
+    this.vel = new Vector(0, 0);
+    this.size = 1;
+  }
+  
+  move(acc) {
+    if(acc) {
+      this.vel.addTo(acc);
+    }
+    this.pos.addTo(this.vel);
+    if(this.vel.getLength() > 1) {
+      this.vel.setLength(1);
+    }
+  }
+  
+  draw() {
+    ctx.fillRect(this.pos.x, this.pos.y, this.size, this.size);
+  }
+  
+  wrap() {
+    if(this.pos.x > w) {
+      this.pos.x = 0;
+    } else if(this.pos.x < -this.size) {
+      this.pos.x = w - 1;
+    }
+    if(this.pos.y > h) {
+      this.pos.y = 0;
+    } else if(this.pos.y < -this.size) {
+      this.pos.y = h - 1;
+    }
+  }
+}
+
+let canvas;
+let ctx;
+let w, h;
+let particles;
+
+function setup() {
+  canvas = document.querySelector("#canvas");
+  ctx = canvas.getContext("2d");
+  reset();
+  window.addEventListener("resize", () => {
+    reset();
+    draw();
+  });
+  canvas.addEventListener("click", draw);
+}
+
+function setupParticles() {
+  particles = [];
+  const factor = Math.random() * 0.01 + 0.005
+  const numberOfParticles = w * h * factor;
+  for(let i = 0; i < numberOfParticles; i++) {
+    const particle = new Particle(Math.random() * w, Math.random() * h);
+    particles.push(particle);
+  }
+}
+
+function reset() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+
+function draw() {
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, w, h);
+  setupParticles();
+  drawParticles();
+}
+
+function drawParticles() {
+  const simplex = new SimplexNoise();
+  const alpha = Math.random() * 0.3 + 0.4;
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  const zoom = Math.random() * w + w*0.1;
+  const offset = 8000;
+  const iterations = Math.random() * 20 + 20;
+  let force = new Vector(0, 1);
+  const directions = 8;
+  for(let i = 0; i < iterations; i++) {
+    particles.forEach(p => {
+      p.draw();
+      const strength = simplex.noise2D(p.pos.x / zoom + offset, p.pos.y / zoom + offset) * 0.3;
+      force.setLength(strength);
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      const n = simplex.noise2D(p.pos.x / zoom, p.pos.y / zoom);
+      const angle = Math.floor(n * directions) / directions * Math.PI * 2;      
+      force.setAngle(angle);
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      p.move(force);
+      p.wrap();
+    });
+  }
+}
+
+setup();
+draw();
+
+
+
+
+if(window.CP) {
+  window.CP.shouldStopExecution = function () {
+    return false;
+  }
+}
+  
+setInterval(function(){
+document.getElementById("canvas").click();
+}, 2000);  
+
+
+</script>  
