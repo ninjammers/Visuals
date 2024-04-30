@@ -1,0 +1,353 @@
+<canvas id="canvas"></canvas>
+
+<style>
+body {
+  background-color: #000;    
+  margin: 0;
+  overflow: hidden;
+  background-repeat: no-repeat;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100vw;
+  height:100vh;
+}
+</style>
+<script>
+let w, h;
+const canvas = document.getElementById("canvas");
+canvas.width = w = window.innerWidth;
+canvas.height = h = window.innerHeight;
+const ctx = canvas.getContext("2d");
+ctx.globalCompositeOperation = "screen";
+
+function polarRandom(scale = 10000) {
+	return (0.1 - Math.random()) * scale;
+}
+
+class Point {
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	add(point) {
+		this.x += point.x;
+		this.y += point.y;
+	}
+	sub(point) {
+		this.x -= point.x;
+		this.y -= point.y;
+	}
+	scale(value) {
+		this.x *= value;
+		this.y *= value;
+	}
+
+	static random(scale) {
+		return new Point(Math.random() * scale, Math.random() * scale);
+	}
+}
+
+class Bezier {
+	constructor(p1, h1, p2, h2, r, g, b) {
+		this.start = p1;
+		this.end = p2;
+		this.startHandle = h1;
+		this.endHandle = h2;
+		this.r = r || Math.random() * 255;
+		this.g = g || Math.random() * 255;
+		this.b = b || Math.random() * 255;
+	}
+
+	get color() {
+		return `rgba(${this.r}, ${this.g}, ${this.b}, 1)`;
+	}
+
+	set color(value) {
+		const [r, g, b] = value;
+		this.r = r;
+		this.g = g;
+		this.b = b;
+	}
+
+	pointOnPath(t) {
+		return cubicBezier(
+			this.start,
+			this.end,
+			{
+				x: this.startHandle.x + this.start.x,
+				y: this.startHandle.y + this.start.y
+			},
+			{ x: this.endHandle.x + this.end.x, y: this.endHandle.y + this.end.y },
+			t
+		);
+	}
+
+	get raw() {
+		return [
+			this.startHandle.x + this.start.x,
+			this.startHandle.y + this.start.y,
+			this.endHandle.x + this.end.x,
+			this.endHandle.y + this.end.y,
+			this.end.x,
+			this.end.y
+		];
+	}
+}
+
+function cubicBezier(start, end, startHandle, endHandle, t) {
+	// Calculate the blending functions
+	const blend1 = (1 - t) ** 3;
+	const blend2 = 3 * t * (1 - t) ** 2;
+	const blend3 = 3 * t ** 2 * (1 - t);
+	const blend4 = t ** 3;
+
+	// Calculate the x and y coordinates of the point on the curve
+	const x =
+		start.x * blend1 +
+		startHandle.x * blend2 +
+		endHandle.x * blend3 +
+		end.x * blend4;
+	const y =
+		start.y * blend1 +
+		startHandle.y * blend2 +
+		endHandle.y * blend3 +
+		end.y * blend4;
+
+	// Return the calculated point
+	return new Point(x, y);
+}
+
+class Shape {
+	path = [];
+	points = [];
+	handles = [];
+	blendControl = null;
+	amount = 1;
+	constructor(points, amount) {
+		for (let i = 0; i < points.length; i += 2) {
+			this.points.push(points[i]);
+			this.handles.push(points[i + 1]);
+		}
+		let acc = [];
+		let l = points.length;
+		for (let i = 0; i < this.points.length; i++) {
+			acc.push(this.points[i], this.handles[i]);
+			if (acc.length === 4) {
+				this.add(
+					new Bezier(
+						acc[0],
+						acc[1],
+						acc[2],
+						acc[3],
+						Math.random() * 255,
+						Math.random() * 255,
+						Math.random() * 255
+					)
+				);
+				acc.splice(0, 2);
+			}
+		}
+		this.add(
+			new Bezier(
+				points[l - 2],
+				points[l - 1],
+				points[0],
+				points[1],
+				Math.random() * 255,
+				Math.random() * 255,
+				Math.random() * 255
+			)
+		);
+		this.amount = amount;
+	}
+	add(bez) {
+		this.path.push(bez);
+	}
+}
+
+function interpolate(shape1, shape2, ctx) {
+	if (shape1.path.length === shape2.path.length) {
+		shape1.path.forEach((path, i) => {
+			const start = path;
+			const end = shape2.path[i];
+
+			const s = start.start;
+			const e = start.end;
+			// start.draw(ctx);
+			// end.draw(ctx);
+			const num = shape1.amount;
+			for (let t = 0; t < num; t++) {
+				const x1 = s.x + ((end.start.x - start.start.x) / num) * t;
+				const y1 = s.y + ((end.start.y - start.start.y) / num) * t;
+				const c1x =
+					start.startHandle.x +
+					((end.startHandle.x - start.startHandle.x) / num) * t;
+				const c1y =
+					start.startHandle.y +
+					((end.startHandle.y - start.startHandle.y) / num) * t;
+				const x2 = e.x + ((end.end.x - start.end.x) / num) * t;
+				const y2 = e.y + ((end.end.y - start.end.y) / num) * t;
+				const c2x =
+					start.endHandle.x + ((end.endHandle.x - start.endHandle.x) / num) * t;
+				const c2y =
+					start.endHandle.y + ((end.endHandle.y - start.endHandle.y) / num) * t;
+
+				const r = start.r + ((end.r - start.r) / num) * t;
+				const g = start.g + ((end.g - start.g) / num) * t;
+				const b = start.b + ((end.b - start.b) / num) * t;
+
+				ctx.beginPath();
+				ctx.moveTo(x1, y1);
+				ctx.lineCap = "round";
+				ctx.strokeStyle = `rgba(${r},${g},${b}, 0.9)`;
+				var deg = (t / num) * 360 * 0.0174533;
+				ctx.lineWidth = 0.1 + (1 - Math.cos(deg)) * 0.4 * 3;
+				ctx.bezierCurveTo(c1x + x1, c1y + y1, c2x + x2, c2y + y2, x2, y2);
+				ctx.stroke();
+			}
+		});
+	}
+}
+
+function setup() {
+	const size = 3 + Math.ceil(Math.random() * 6);
+	const amount = 15 + Math.ceil(Math.random() * 15);
+
+	let handle = new Point(0, 10);
+
+	const ps1 = new Array(size * 2).fill(0).map((x, i) => {
+		let point;
+		if (i % 2 === 0) {
+			point = new Point(w * Math.random(), h * Math.random());
+		} else {
+			point = handle;
+		}
+
+		return point;
+	});
+
+	const ps2 = new Array(size * 2).fill(0).map((x, i) => {
+		let point;
+		if (i % 2 === 0) {
+			point = new Point(w * Math.random(), h * Math.random());
+		} else {
+			//handle = handle.reflect();
+			point = handle;
+		}
+
+		return point;
+	});
+
+	const ps3 = new Array(3*2).fill(0).map((x, i) => {
+		let point;
+		if (i % 2 === 0) {
+			point = new Point((w/2)+(polarRandom(2)), h/2 + (h/2*polarRandom(2)));
+		} else {
+			point = handle;
+		}
+
+		return point;
+	});
+	
+		const ps4 = new Array(3*2).fill(0).map((x, i) => {
+		let point;
+		if (i % 2 === 0) {
+			point = new Point((w/2)+(polarRandom(2)), h/2 + (h/2*polarRandom(2)));
+		} else {
+			//handle = handle.reflect();
+			point = handle;
+		}
+
+		return point;
+	});
+
+	const shape1 = new Shape(ps1, amount);
+	const shape2 = new Shape(ps2, amount);
+	const shape3 = new Shape(ps3, amount);
+	const shape4 = new Shape(ps4, amount);
+
+	return { ps1, ps2, ps3, ps4, shape1, shape2, shape3, shape4 };
+}
+
+let { ps1, ps2, ps3, ps4, shape1, shape2, shape3, shape4 } = setup();
+
+var grd = ctx.createRadialGradient(w/2, h/2, 10, w/2, h/2, 6);
+grd.addColorStop(0, "black");
+grd.addColorStop(0.9, "rgba(0,0,0,0)");
+grd.addColorStop(1, "rgba(0,0,0,0)");
+
+function draw() {
+	ps1.forEach((p, i) => {
+		p.x += Math.sin(i + performance.now() * 0.00342442);
+		p.y += Math.cos(i + performance.now() * 0.00978345);
+	});
+
+	ps2.forEach((p, i) => {
+		p.x += Math.cos(i + performance.now() * 0.00762)*14;
+		p.y += Math.sin(i + performance.now() * 0.0095649)*14;
+	});
+	
+		ps3.forEach((p, i) => {
+		p.x += Math.cos(i + performance.now() * 0.0035642)*4;
+		p.y += Math.sin(i + performance.now() * 0.005649)*4;
+	});
+	
+		ps4.forEach((p, i) => {
+		p.x += Math.cos(i + performance.now() * 0.004576)*4;
+		p.y += Math.sin(i + performance.now() * 0.00649)*4;
+	});
+
+	//ctx.clearRect(0, 0, w, h);
+	ctx.restore()
+
+	ctx.clearRect(0,0, w, h);
+	
+	ctx.globalCompositeOperation = "screen";
+	interpolate(shape1, shape2, ctx);
+	ctx.save()
+	ctx.globalCompositeOperation = "source-over";
+	ctx.moveTo(0,0);
+	ctx.fillStyle = grd;
+	ctx.fillRect(0, 0, w, h);
+	ctx.restore();
+	ctx.globalCompositeOperation = "screen";
+	interpolate(shape3, shape4, ctx);
+	ctx.save();
+	ctx.globalCompositeOperation = "screen";
+	ctx.translate(w, 0);
+	ctx.scale(-1, 1);
+	ctx.drawImage(canvas, 0, 0, w, h)
+	ctx.restore();
+
+	requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+window.addEventListener("resize", () => {
+	canvas.width = w = window.innerWidth;
+	canvas.height = h = window.innerHeight;
+});
+
+window.addEventListener("click", () => {
+	let set = setup();
+	ps1 = set.ps1;
+	ps2 = set.ps2;
+	ps3 = set.ps3;
+	ps4 = set.ps4;
+	shape1 = set.shape1;
+	shape2 = set.shape2;
+	shape3 = set.shape3;
+	shape4 = set.shape4;
+});
+
+window.addEventListener("pointermove", (e) => {
+	
+	
+});
+  
+setInterval(function(){
+document.getElementById("canvas").click();
+}, 3000);  
+</script>
