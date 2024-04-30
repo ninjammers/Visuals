@@ -1,0 +1,137 @@
+<script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js" type="text/javascript"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/controls/OrbitControls.js" type="text/javascript"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/utils/BufferGeometryUtils.js" type="text/javascript"></script>
+
+<script src="https://cdn.rawgit.com/josephg/noisejs/master/perlin.js" type="text/javascript"></script>
+
+<style>
+* {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: #333;
+}
+canvas {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+}
+
+</style>
+
+<script>
+
+/*!
+GlassMaterial.js
+Copyright (c) 2022 Wakana Y.K.
+URL：https://codepen.io/wakana-k/pen/XWBZeaE
+*/
+!function() {
+    "use strict";
+    function e() {
+        t.aspect = window.innerWidth / window.innerHeight, t.updateProjectionMatrix(), a.setSize(window.innerWidth, window.innerHeight);
+    }
+    let t, n, a, i, o, s, r,m;
+    const l = (Math.random() * 20) + 0.1;
+    !function() {
+        var c, d, p;
+        const h = document.createElement("div");
+        document.body.appendChild(h), n = new THREE.Scene(), (a = new THREE.WebGLRenderer({
+            antialias: !0,
+            alpha: !0
+        })).setPixelRatio(window.devicePixelRatio), a.setSize(window.innerWidth, window.innerHeight), 
+        a.outputEncoding = THREE.sRGBEncoding, h.appendChild(a.domElement), (t = new THREE.PerspectiveCamera(Math.floor(Math.random() * 100) + 10, window.innerWidth / window.innerHeight, .01, 5 * l)).position.set(100, l, 2 * l), 
+        t.lookAt(0, 0, 0);
+        const E = new THREE.AmbientLight(16777215);
+        n.add(E), o = new THREE.SphereGeometry(1, 35, 50), s = new THREE.MeshPhysicalMaterial({
+            transparent: !0,
+            reflectivity: .2,
+            envMapIntensity: 1,
+            clearcoat: 1,
+            clearcoatRoughness: .3,
+            color: 16777215,
+            transmission: 1,
+            opacity: 1,
+            metalness: 0,
+            roughness: .05,
+            ior: 0,
+            thickness: 0,
+            side: THREE.BackSide
+        }), r = new THREE.Mesh(o, s);
+         m = new THREE.MeshMatcapMaterial({
+            
+            envMapIntensity: 1,
+            color: 16777215,
+            
+            
+        });let u = o.clone();
+        for (let e = 0; e < u.attributes.position.count; e++) {
+            let t = new THREE.Vector3();
+            t.fromBufferAttribute(u.getAttribute("position"), e), t.normalize().multiplyScalar(1 + .1 * noise.perlin3(1.5 * t.x, 1.5 * t.y, 1.5 * t.z)), 
+            u.attributes.position.setX(e, t.x), u.attributes.position.setY(e, t.y), u.attributes.position.setZ(e, t.z);
+        }
+        u.computeVertexNormals(), u.verticesNeedUpdate = !0, u.normalsNeedUpdate = !0;
+        for (let e = 0; e < 30; e++) {
+            c = new THREE.Vector3(Math.random() - 1, Math.random() - 2.5, Math.random() - .5).normalize(), 
+            d = 1 * Math.random() * .85, p = c.multiplyScalar(d);
+            let e = new THREE.Mesh(u, m);
+            e.position.set(p.x, p.y, p.z);
+            let t = THREE.MathUtils.randFloat(.02, .13);
+            e.scale.set(t, t, t), e.rotation.set(2 * Math.random() * Math.PI, 2 * Math.random() * Math.PI, 2 * Math.random() * Math.PI), 
+            r.add(e);
+        }
+        n.add(r), r = r.clone(), s = new THREE.MeshPhysicalMaterial({
+            color: 16777215,
+            metalness: .01,
+            roughness: 0,
+            transparent: 1,
+            opacity: 1,
+            transmission: 1,
+            envMapIntensity: 1,
+            ior: 1.5,
+            reflectivity: .05,
+            specularIntensity: 3.5,
+            specularColor: 16777215,
+            thickness: .3,
+            clearcoat: 0,
+            clearcoatRoughness: 0,
+            side: THREE.BackSide
+        }), r.material = s, r.position.set(3, 0, 0), n.add(r), r = r.clone(), s = new THREE.MeshPhysicalMaterial({
+            color: 16777215,
+            metalness: 0,
+            roughness: 0.01,
+            transparent: 1,
+            opacity: 1,
+            transmission: 1,
+            envMapIntensity: 1,
+            ior: 1.5,
+            reflectivity: .05,
+            specularIntensity: 3.5,
+            specularColor: 16777215,
+            thickness: 20,
+            clearcoat: 2,
+            clearcoatRoughness: .01,
+            side: THREE.BackSide
+        }), r.material = s, r.position.set(-3, 0, 0), n.add(r), new THREE.TextureLoader().load("https://cdn.polyhaven.com/asset_img/primary/lilienstein.png?height=1080", function(e) {
+            e.mapping = THREE.EquirectangularReflectionMapping, n.background = e, n.environment = e,m.matcap=e;
+        }), (i = new THREE.OrbitControls(t, a.domElement)).autoRotate = !0, i.autoRotateSpeed = 2, 
+        i.enableDamping = !0, i.enablePan = !1, i.minDistance = .1, i.maxDistance = 3 * l, 
+        i.minPolarAngle = 0, i.maxPolarAngle = Math.PI / 2, i.target.set(0, 0, 0), i.update(), 
+        window.addEventListener("resize", e);
+    }(), function e() {
+        requestAnimationFrame(e), i.update(), a.render(n, t);
+    }();
+}();
+  
+</script>  
