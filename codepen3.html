@@ -1,0 +1,301 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tinycolor/1.4.1/tinycolor.min.js" type="text/javascript"></script>
+
+
+
+
+
+
+<div id="container">
+  <div class="grid" id="grid1">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid2">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid3">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid4">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid5">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid6">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid7">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid8">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid9">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid10">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+    <div class="grid" id="grid11">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid12">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid13">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid14">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid15">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid6">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid17">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid18">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid19">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+  <div class="grid" id="grid20">
+    <div class="ul"></div>
+    <div class="ur"></div>
+    <div class="bl"></div>
+    <div class="br"></div>
+  </div>
+</div>
+
+
+<style>
+  body {
+    font-family: 'La Belle Aurore';
+    background-color: black;
+    overflow: hidden;
+    display: flex;
+    flex-direction:column;
+    justify-content:space-between;
+    align-items:center;
+    height:100vh;
+    width:100vw;
+    color:white;    
+    box-sizing:border-box;
+    padding:5px;
+    
+  }
+#header{
+  width:95%;
+  display:flex;
+  justify-content:center;
+  margin-bottom:-10px;
+}
+
+
+#container {
+  flex:0 1 100vmin;
+  position:relative;
+  width:100vmin;
+  height:100vmin;
+}
+.grid {
+    width:100vmin;
+    height:100vmin;  
+    position:absolute;
+    top:0;left:0;  
+    transition:all 1s;
+}
+.grid div {
+  position:absolute;
+}
+.ul {
+  top:0;
+  left:0;
+}
+.ur {
+  top:0;
+  right:0;
+}
+.bl{
+  bottom:0;
+  left:0;
+}
+.br{
+  bottom:0;
+  right:0;
+}
+</style>
+
+<script>
+var body = document.querySelector("body");
+/*generate the options*/
+body.addEventListener("click", generate)
+body.onresize = body.click
+setInterval(()=>{
+    if(document.querySelector("#demoMode").checked) body.click()
+  }, 2000)
+generate()
+
+function generate(ev) {
+  if(ev&&(ev.target.id=="demoMode"||ev.target.id=="demoLabel")) return false;
+  var options = {};
+  options.mixBlend = pick(["exclusion", "difference"]);
+  options.straightEdges = chance(.7);
+  options.c1 = tinycolor.random().toHexString();//not used.
+  options.solidBorders = chance(.7);
+  options.doubleBorders = !options.solidBorders && chance(.7);
+  options.cross = chance(.7);
+  options.invert = chance();
+  options.halfMoons = chance(.3);
+  options.moonPercent = chance() ? ".75" : ".85";
+  options.allowOuterBorders = chance(.9);
+  body.style.backgroundColor = (options.invert ? "#ffffff" : "#000000");
+  body.style.color = (options.invert ? "#000000" : "#ffffff");
+  options.x = !options.cross && chance(.7);
+  drawGrid("#grid1", options);
+  drawGrid("#grid2", options);
+  drawGrid("#grid3", options);
+  drawGrid("#grid4", options);
+  drawGrid("#grid5", options);
+  if(chance(.15)) {
+    drawGrid("#grid6", options);
+    drawGrid("#grid7", options);
+    drawGrid("#grid8", options);
+    drawGrid("#grid9", options);
+    drawGrid("#grid10", options);
+  }
+
+}
+
+function drawGrid(id, options) {
+  var grid = document.querySelector(id);
+  grid.style.filter = (options.invert ? "invert(0%)" : "invert(100%)");
+  var min = Math.min(grid.clientWidth, grid.clientHeight);
+  //console.log(min);
+  var angles = options.cross ? [0] : options.x ? [45] : [0,45];
+  var scalingFactor = options.allowOuterBorders ? .7 : 1.1;
+  grid.style.transform = `rotate(${pick(angles)}deg) scale(${Math.random()*scalingFactor})`;
+  var els =  [...grid.querySelectorAll(".ul, .ur, .bl, .br")]
+  var w = getRandomInt(20,175)+'%';
+  var h = getRandomInt(40,155)+'%';
+  var maxBorder = min < 361 ? 40 : min < 510 ? 50 : min < 760 ? 60 : min < 1081 ? 70 : min < 1500 ? 80 : 100;
+  var minBorder = min < 361 ? 5 : min < 760 ? 10 : min < 1400 ? 15 : 20;
+  var borderSize = getRandomInt(minBorder,maxBorder);
+  var borderRadius = getRandomInt(options.straightEdges&&!options.allowOuterBorders?0:35,50);
+  var borderStyle = options.solidBorders ? "solid" : options.doubleBorders ? "double" : pick(["double" ,"solid"]);
+  var moonPercent = chance(options.moonPercent);
+  els.forEach((el,i) => {
+    //el.style.transition = "all 1s";//nice effect but heavy
+    el.style.mixBlendMode = options.mixBlend;
+    el.style.width = w;
+    el.style.height = w;
+    el.style.borderWidth = borderSize+"px";
+    el.style.borderColor = "#ffffff";
+    el.style.borderStyle = borderStyle;
+    el.style.borderRadius = borderRadius+"%";
+    if(options.halfMoons) {
+      if(options.invert) {
+        if(moonPercent) grid.style.filter = "invert(100%)";
+      } else {
+        if(moonPercent) grid.style.filter = "invert(0%)";
+      } 
+    }
+     if(!options.allowOuterBorders) switch(el.className) {
+        case "ul":
+          el.style.borderTop = "none";
+          el.style.borderLeft = "none";
+          break;
+        case "ur":
+          el.style.borderTop = "none";
+          el.style.borderRight = "none";
+          break;
+        case "bl":
+          el.style.borderBottom = "none";
+          el.style.borderLeft = "none";
+          break;
+        case "br":
+          el.style.borderBottom = "none";
+          el.style.borderRight = "none";
+          break;
+      }
+  })
+}
+
+function getRandomInt(min, max) {
+  min = Math.ceil(min)
+  max = Math.floor(max)
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+function chance(threshold=.9){  
+  return Math.random()>threshold;
+}
+       
+setInterval(function(){
+document.getElementById("container").click();
+}, 4000);
+  
+</script>  
