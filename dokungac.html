@@ -1,0 +1,205 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js" type="text/javascript"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js" type="text/javascript"></script>
+
+
+
+<script>
+const W = 860;
+const H = 1080;
+const shapes = [];
+const simplex1 = new SimplexNoise();
+const simplex2 = new SimplexNoise();
+let P = 0;
+
+setup = (_) => createCanvas(W, H) + shapes.push(createShape()) + background(0);
+draw = (_) => {
+  background(0, 130);
+  shapes.forEach((s) => s.draw());
+  P = (P + (Math.random() * 0.01) + 0.001) % 10; 
+};
+
+function createShape() {
+  const $ = {
+    x: W * 0.5,
+    y: H * 0.5,
+    r: W * 0.24,
+    a: PI,
+    ts: [],
+    NUM_T: 8,
+  };
+
+  let n, nn;
+  for (n = 0; n < $.NUM_T; n++) {
+    nn = n / $.NUM_T;
+    $.ts.push(
+      Tentacle({
+        x: W * (0.3 + nn * 0.4),
+        y: H * 1.02,
+        a: -HALF_PI + map(n, 0, $.NUM_T, -0.3, 0.3),
+        noise1: simplex1,
+        noise2: simplex2,
+        o: n / $.NUM_T,
+        ssr: random(0.2, 1.7),
+      })
+    );
+  }
+
+  $.draw = () => {
+    $.ts.forEach((t,i) => {
+      stroke(50 + 250*i/$.ts.length);
+      t.draw()
+    });
+  };
+  return $;
+}
+
+function Tentacle(options) {
+  const $ = {
+    x: W * 0.5,
+    y: H * 0.5,
+    a: 0.3,
+    r: 10,
+    o: 0,
+    length: 230,
+    ns: 2.5, // noise scale
+    noise1: null,
+    noise2: null,
+    ssr: 0.9,
+    numStrands: 3,
+    strands: [],
+    ...options,
+  };
+
+  let $pt, n, x, y, nn;
+
+  // add strands
+  for (n = 0; n < $.numStrands; n++) {
+    nn = n / $.numStrands;
+    const strand = new Strand({
+      noise1: $.noise1,
+      noise2: $.noise2,
+      x: $.x,
+      y: $.y,
+      a: $.a,
+      v: H * random(0.03, 0.15),
+      length: 15,
+      noise1Mult: 4.5 + nn * 0.7,
+      noise2Mult: 6.5 + nn * 0.3,
+      _ratio: $.ssr ** (n + 1),
+    });
+
+    $.strands.push(strand);
+  }
+
+  $.draw = () => {
+    $.strands.forEach((s, i) => {
+      $pt = null;
+
+      if (i > 0) {
+        n =
+          lerp(0, $.strands[0].points.length, ($.ssr * i) / $.numStrands) >> 0;
+        s.x = $.strands[0].points[n - 1].x;
+        s.y = $.strands[0].points[n - 1].y;
+        s.a = PI - $.strands[0].points[n - 1].a;
+        s.length = lerp($.length, 10, i / $.numStrands);
+      }
+
+      s.calculate(P).points.forEach((pt, j) => {
+        if ($pt) {
+          // stroke(255);
+          strokeWeight(map(j, 0, s.points.length-1, 4, 0.8));
+          line(...ptsToXy(pt, $pt));
+        }
+        if(j % 2 ==0 && j > s.points.length * 0.4){
+        	x = pt.x + cos(pt.a + 0.6) * W * 0.0083;
+        	y = pt.y + sin(pt.a + 0.6) * W * 0.0083;
+          line(pt.x,pt.y, x, y)
+        	x = pt.x + cos(pt.a - 0.6) * W * 0.0083;
+        	y = pt.y + sin(pt.a - 0.6) * W * 0.0083;
+          line(pt.x,pt.y, x, y)
+        }
+        $pt = pt;
+      });
+    });
+  };
+  return $;
+}
+
+function Strand(options) {
+  const $ = {
+    x: 0,
+    y: 0,
+    a: 0,
+    v: 0,
+    l: 0,
+    o: 0, // noise offset
+    ns: 2, // noise scale
+    noise1: options.noise1, // 3d noise
+    noise2: options.noise2, // 3d noise
+    noise1Mult: 6.4,
+    noise2Mult: 8.6,
+    length: 50,
+    ...options,
+    points: [],
+  };
+
+  $.calculate = (phase) => {
+    $.points = [];
+    let pt;
+    vx = cos($.a) * $.v;
+    vy = sin($.a) * $.v;
+    x = $.x;
+    y = $.y;
+    a = $.a;
+
+    pt = { x, y, a };
+    $.points.push(pt);
+
+    for (i = 0; i < $.length; i++) {
+      ii = i / $.length;
+      n1 =
+        $.noise1.noise3D(
+          (x / W) * $.ns + $.o * cos(phase * TWO_PI) * 0.053,
+          (y / H) * $.ns + $.o * sin(phase * TWO_PI) * 0.053,
+          $.o * 0.01 + sin(phase * TWO_PI)
+        ) * $.noise1Mult;
+      n2 =
+        $.noise2.noise3D(
+          (x / W) * $.ns + $.o * cos(phase * TWO_PI) * 0.903,
+          (y / H) * $.ns + $.o * sin(phase * TWO_PI) * 0.903,
+          (i + (($.o * 2) % 1)) * 0.03 + cos(phase * TWO_PI)
+        ) * $.noise2Mult;
+      n = lerp(n1, n2, 0.5 + 0.2 * sin(phase * TWO_PI + $.o + ii));
+      vx = lerp(vx, cos(n) * (9 - 7 * ii), 0.18);
+      vy = lerp(vy, sin(n) * (9 - 7 * ii), 0.12);
+
+      x = lerp(x, x + vx, 0.6);
+      y = lerp(y, y + vy, 0.6);
+      a = atan2(y - pt.y, x - pt.x);
+      pt = { x, y, a };
+      $.points.push(pt);
+    }
+    return $;
+  };
+  return $;
+}
+
+function ptsToXy(...pts) {
+  return pts.map((pt) => [pt.x, pt.y]).flat();
+}
+
+</script>
+
+<style>
+body {
+background: #000;
+  
+} 
+canvas {
+    position: absolute;
+    bottom: 0;
+}
+  
+</style>
+
