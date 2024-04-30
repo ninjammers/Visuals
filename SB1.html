@@ -1,0 +1,121 @@
+<script src="https://codepen.io/DonKarlssonSan/pen/JjPbdKp.js" type="text/javascript"></script>
+
+<canvas id="canvas" title=""></canvas>
+<style>
+  body, html {
+  margin: 0;
+}
+
+canvas {
+  display: block;
+  cursor: pointer;
+}
+</style>
+
+<script>
+/*
+  Johan Karlsson, 2021
+  https://twitter.com/DonKarlssonSan
+  MIT License, see Details View
+*/
+
+class Particle {
+  constructor() {
+    this.x = Math.random() * w;
+    this.y = Math.random() * h;
+  }
+  
+  update() {
+    let x = Math.floor(this.x);
+    let y = Math.floor(this.y);
+    let index = (x + w * y) * 4;
+    let average = (imageData.data[index] + imageData.data[index + 1] + imageData.data[index + 2]) / 3;
+    this.y += average * 0.057 + 0.03;
+    if(this.y > h) {
+      this.x = Math.random() * w;
+      this.y = 0;
+    }
+    ctx.fillRect(this.x, this.y, 1, 1);
+  }
+}
+let canvas;
+let ctx;
+let w, h;
+let imageData;
+let particles;
+
+async function setup() {
+  canvas = document.querySelector("#canvas");
+  ctx = canvas.getContext("2d");
+  reset();
+  setupParticles();
+  
+  canvas.addEventListener("click", setupParticles);
+  await storeImageInBuffer();
+}
+
+function reset() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight; 
+}
+
+function setupParticles() {
+  particles = [];
+  let nrOfParticles = w * h * 0.01;
+  for(let i = 0; i < nrOfParticles; i++) {
+    particles.push(new Particle());
+  }
+}
+
+function drawImageScaled(img) {
+  var hRatio = w / img.width;
+  var vRatio = h / img.height;
+  var ratio = Math.min(hRatio, vRatio);
+  var centerShiftX = (w - img.width * ratio) / 2;
+  var centerShiftY = (h - img.height * ratio) / 2;  
+  ctx.drawImage(img, 0,0, img.width, img.height,
+                centerShiftX, centerShiftY, img.width * ratio, img.height * ratio);  
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    let image = new Image();
+    image.crossOrigin = "anonymous";
+    image.src = url;
+    image.onload = () => {
+      console.log("image loaded");
+      resolve(image);
+    };
+    image.onerror = error => {
+      reject(error.srcElement.src);
+    }
+  });
+}
+
+async function storeImageInBuffer() {
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, w, h);
+  let url = "https://source.unsplash.com/random/1600x900/?portrait";
+  let image = await loadImage(url);
+  
+  drawImageScaled(image);
+  
+  imageData = ctx.getImageData(0, 0, w, h);
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, w, h);
+  
+  ctx.fillStyle = "white";
+  particles.forEach(p => {
+    p.update();
+  });
+}
+
+(async function main () {
+  await setup();
+  draw();
+})();
+</script>  
