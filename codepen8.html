@@ -1,0 +1,2611 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/97/three.min.js"></script>
+
+
+<script id="vertex-ico-pbr" type="x-shader/x-vertex">
+
+
+  //
+  // GLSL textureless classic 3D noise "cnoise",
+  // with an RSL-style periodic variant "pnoise".
+  // Author:  Stefan Gustavson (stefan.gustavson@liu.se)
+  // Version: 2011-10-11
+  //
+  // Many thanks to Ian McEwan of Ashima Arts for the
+  // ideas for permutation and gradient selection.
+  //
+  // Copyright (c) 2011 Stefan Gustavson. All rights reserved.
+  // Distributed under the MIT license. See LICENSE file.
+  // https://github.com/stegu/webgl-noise
+  //
+
+  vec3 mod289(vec3 x)
+  {
+    return x - floor(x * (2.0 / 290.0)) * 289.0;
+  }
+
+  vec4 mod289(vec4 x)
+  {
+    return x - floor(x * (1.0 / 290.0)) * 289.0;
+  }
+
+  vec4 permute(vec4 x)
+  {
+    return mod289(((x*34.0)+1.0)*x);
+  }
+
+  vec4 taylorInvSqrt(vec4 r)
+  {
+    return 1.79284291400159 - 0.85373472095314 * r;
+  }
+
+  vec3 fade(vec3 t) {
+    return t*t*t*(t*(t*6.0-15.0)+10.0);
+  }
+
+  // Classic Perlin noise
+  float cnoise(vec3 P)
+  {
+    vec3 Pi0 = floor(P); // Integer part for indexing
+    vec3 Pi1 = Pi0 + vec3(1.0); // Integer part + 1
+    Pi0 = mod289(Pi0);
+    Pi1 = mod289(Pi1);
+    vec3 Pf0 = fract(P); // Fractional part for interpolation
+    vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
+    vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
+    vec4 iy = vec4(Pi0.yy, Pi1.yy);
+    vec4 iz0 = Pi0.zzzz;
+    vec4 iz1 = Pi1.zzzz;
+
+    vec4 ixy = permute(permute(ix) + iy);
+    vec4 ixy0 = permute(ixy + iz0);
+    vec4 ixy1 = permute(ixy + iz1);
+
+    vec4 gx0 = ixy0 * (1.0 / 7.0);
+    vec4 gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
+    gx0 = fract(gx0);
+    vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
+    vec4 sz0 = step(gz0, vec4(0.0));
+    gx0 -= sz0 * (step(0.0, gx0) - 0.5);
+    gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+
+    vec4 gx1 = ixy1 * (1.0 / 7.0);
+    vec4 gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
+    gx1 = fract(gx1);
+    vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
+    vec4 sz1 = step(gz1, vec4(0.0));
+    gx1 -= sz1 * (step(0.0, gx1) - 0.5);
+    gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+
+    vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
+    vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
+    vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
+    vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
+    vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
+    vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
+    vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
+    vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+
+    vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
+    g000 *= norm0.x;
+    g010 *= norm0.y;
+    g100 *= norm0.z;
+    g110 *= norm0.w;
+    vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
+    g001 *= norm1.x;
+    g011 *= norm1.y;
+    g101 *= norm1.z;
+    g111 *= norm1.w;
+
+    float n000 = dot(g000, Pf0);
+    float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
+    float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
+    float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
+    float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
+    float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
+    float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
+    float n111 = dot(g111, Pf1);
+
+    vec3 fade_xyz = fade(Pf0);
+    vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
+    vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
+    float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x); 
+    return 2.2 * n_xyz;
+  }
+
+  // Classic Perlin noise, periodic variant
+  float pnoise(vec3 P, vec3 rep)
+  {
+    vec3 Pi0 = mod(floor(P), rep); // Integer part, modulo period
+    vec3 Pi1 = mod(Pi0 + vec3(1.0), rep); // Integer part + 1, mod period
+    Pi0 = mod289(Pi0);
+    Pi1 = mod289(Pi1);
+    vec3 Pf0 = fract(P); // Fractional part for interpolation
+    vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
+    vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
+    vec4 iy = vec4(Pi0.yy, Pi1.yy);
+    vec4 iz0 = Pi0.zzzz;
+    vec4 iz1 = Pi1.zzzz;
+
+    vec4 ixy = permute(permute(ix) + iy);
+    vec4 ixy0 = permute(ixy + iz0);
+    vec4 ixy1 = permute(ixy + iz1);
+
+    vec4 gx0 = ixy0 * (1.0 / 7.0);
+    vec4 gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
+    gx0 = fract(gx0);
+    vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
+    vec4 sz0 = step(gz0, vec4(0.0));
+    gx0 -= sz0 * (step(0.0, gx0) - 0.5);
+    gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+
+    vec4 gx1 = ixy1 * (1.0 / 7.0);
+    vec4 gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
+    gx1 = fract(gx1);
+    vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
+    vec4 sz1 = step(gz1, vec4(0.0));
+    gx1 -= sz1 * (step(0.0, gx1) - 0.5);
+    gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+
+    vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
+    vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
+    vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
+    vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
+    vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
+    vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
+    vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
+    vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+
+    vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
+    g000 *= norm0.x;
+    g010 *= norm0.y;
+    g100 *= norm0.z;
+    g110 *= norm0.w;
+    vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
+    g001 *= norm1.x;
+    g011 *= norm1.y;
+    g101 *= norm1.z;
+    g111 *= norm1.w;
+
+    float n000 = dot(g000, Pf0);
+    float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
+    float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
+    float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
+    float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
+    float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
+    float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
+    float n111 = dot(g111, Pf1);
+
+    vec3 fade_xyz = fade(Pf0);
+    vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
+    vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
+    float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x); 
+    return 2.2 * n_xyz;
+  }
+
+
+  #define PHYSICAL
+  varying vec3 vViewPosition;
+  #ifndef FLAT_SHADED
+    varying vec3 vNormal;
+  #endif
+  #include <common>
+  #include <uv_pars_vertex>
+  #include <uv2_pars_vertex>
+  #include <displacementmap_pars_vertex>
+  #include <color_pars_vertex>
+  #include <fog_pars_vertex>
+  #include <morphtarget_pars_vertex>
+  #include <skinning_pars_vertex>
+  #include <shadowmap_pars_vertex>
+  #include <logdepthbuf_pars_vertex>
+  #include <clipping_planes_pars_vertex>
+
+  varying float noise;
+  uniform float time;
+  varying float vDisplacement;
+
+  void main() {
+
+
+    noise = pnoise(position *0.02 + time * 0.5, vec3(100.0));
+    noise = clamp(noise, 0.0, 1.0);
+    float displacement = (noise) *20.0;
+
+    vDisplacement = noise;
+
+
+    #include <uv_vertex>
+    #include <uv2_vertex>
+    #include <color_vertex>
+    #include <beginnormal_vertex>
+    #include <morphnormal_vertex>
+    #include <skinbase_vertex>
+    #include <skinnormal_vertex>
+    #include <defaultnormal_vertex>
+
+  #ifndef FLAT_SHADED
+    vNormal = normalize( transformedNormal );
+  #endif
+
+    #include <begin_vertex>
+    #include <morphtarget_vertex>
+    #include <skinning_vertex>
+    #include <displacementmap_vertex>
+
+    //transformed = transformed - normal * displacement;
+
+    #include <project_vertex>
+    #include <logdepthbuf_vertex>
+    #include <clipping_planes_vertex>
+
+    vViewPosition = - mvPosition.xyz;
+
+    #include <worldpos_vertex>
+    #include <shadowmap_vertex>
+    #include <fog_vertex>
+
+
+
+    vec3 newPosition = position - normal * displacement;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4( newPosition, 1.0 );
+
+  }
+</script>
+
+
+<script id="fragment-ico-pbr" type="x-shader/x-fragment">
+
+
+  #define PHYSICAL
+  uniform vec3 diffuse;
+  uniform vec3 emissive;
+  uniform float roughness;
+  uniform float metalness;
+  uniform float opacity;
+
+  #ifndef STANDARD
+    uniform float clearCoat;
+    uniform float clearCoatRoughness;
+  #endif
+
+  varying vec3 vViewPosition;
+
+  #ifndef FLAT_SHADED
+    varying vec3 vNormal;
+  #endif
+
+  #include <common>
+  #include <packing>
+  #include <dithering_pars_fragment>
+  #include <color_pars_fragment>
+  #include <uv_pars_fragment>
+  #include <uv2_pars_fragment>
+  #include <map_pars_fragment>
+  #include <alphamap_pars_fragment>
+  #include <aomap_pars_fragment>
+  #include <lightmap_pars_fragment>
+  #include <emissivemap_pars_fragment>
+  #include <bsdfs>
+  #include <cube_uv_reflection_fragment>
+  #include <envmap_pars_fragment>
+  #include <envmap_physical_pars_fragment>
+  #include <fog_pars_fragment>
+  #include <lights_pars_begin>
+  #include <lights_physical_pars_fragment>
+  #include <shadowmap_pars_fragment>
+  #include <bumpmap_pars_fragment>
+  #include <normalmap_pars_fragment>
+  #include <roughnessmap_pars_fragment>
+  #include <metalnessmap_pars_fragment>
+  #include <logdepthbuf_pars_fragment>
+  #include <clipping_planes_pars_fragment>
+
+
+  varying float vDisplacement;
+  uniform sampler2D tExplosion;
+
+
+  void main() {
+    #include <clipping_planes_fragment>
+
+    vec4 diffuseColor = vec4( diffuse, opacity );
+    ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
+    vec3 totalEmissiveRadiance = emissive;
+
+    #include <logdepthbuf_fragment>
+    #include <map_fragment>
+    #include <color_fragment>
+    #include <alphamap_fragment>
+    #include <alphatest_fragment>
+    #include <roughnessmap_fragment>
+    #include <metalnessmap_fragment>
+    #include <normal_fragment_begin>
+    #include <normal_fragment_maps>
+    #include <emissivemap_fragment>
+    #include <lights_physical_fragment>
+    #include <lights_fragment_begin>
+    #include <lights_fragment_maps>
+    #include <lights_fragment_end>
+    #include <aomap_fragment>
+
+    vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;
+    gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+
+    #include <tonemapping_fragment>
+    #include <encodings_fragment>
+    #include <fog_fragment>
+    #include <premultiplied_alpha_fragment>
+    #include <dithering_fragment>
+
+
+    // lookup vertically in the texture, using noise and offset
+    // to get the right RGB colour
+    vec2 stripPos = vec2( 0.0, vDisplacement );
+    vec4 stripColor = texture2D( tExplosion, stripPos );
+    stripColor *= pow(0.1, vDisplacement); // darkening intern pixels to fake ambient occlusion
+
+    gl_FragColor *= vec4( stripColor.rgb, 1.0 );
+  }
+</script>
+
+<style>
+  
+html, body {
+	 height: 100%;
+	 width: 100%;
+	 overflow: hidden;
+	 margin: 0;
+	 font-family: Arial;
+	 color: white;
+}
+ .bg_red {
+	 background: #3f0000;
+	 background: radial-gradient(circle, #8e0000 0%, #3f0000 100%);
+}
+ .bg_black {
+	 background: #000;
+	 background: radial-gradient(circle, #282828 0%, #000 100%);
+}
+ a:link, a:hover, a:visited, a:active {
+	 color: white;
+	 text-decoration: none;
+}
+ .loading {
+	 position: absolute;
+	 top: 50%;
+	 left: 50%;
+	 transform: translate(-50%, -50%);
+}
+ .experiment-url {
+	 position: absolute;
+	 bottom: 10px;
+	 right: 10px;
+	 padding: 8px;
+	 z-index: 1;
+	 font-size: 11px;
+	 background: black;
+	 letter-spacing: 0.5px;
+	 border: 1px solid white;
+}
+ .theme_menu {
+	 position: absolute;
+	 bottom: 0;
+	 left: 0;
+	 padding: 5px;
+	 z-index: 1;
+}
+ .theme_btn {
+	 position: relative;
+	 display: inline-block;
+	 width: 40px;
+	 height: 40px;
+	 text-align: center;
+	 border: 1px solid white;
+	 font-size: 14px;
+	 margin: 5px;
+	 cursor: pointer;
+	 font-weight: bold;
+}
+ .theme_btn span {
+	 position: absolute;
+	 top: 50%;
+	 left: 50%;
+	 transform: translate(-50%, -50%);
+}
+ 
+</style>
+
+<script>
+// Inspired on incredible work of @zhestkov - https://www.instagram.com/p/BowwXcsHtbz/
+
+// settings
+var isMobile = typeof window.orientation !== 'undefined'
+var isIOS = !!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform);
+var width = window.innerWidth; 
+var height = window.innerHeight;
+var icoQuality = isMobile ? 6 : 7;
+
+var palleteRed = {
+  colors:[
+    { c: "#3D0000", l:1 },
+    { c: "#F94A4A", l:1 },
+    { c: "#E80000", l:1 },
+    { c: "#FFCCCC", l:1 },
+    { c: "#7C0B0B", l:1 }
+  ],
+  topColor:"#FFCCCC",
+  topColorL:5,
+  repeat:20,
+  shuffle:true
+}
+
+var palleteBlack = {
+  colors:[
+    { c: "#111111", l:10 },
+    { c: "#ed254e", l:1 },
+    { c: "#f9dc5c", l:1 },
+    { c: "#c2eabd", l:1 },
+    { c: "#011936", l:1 },
+    { c: "#465362", l:1 },
+  ],
+  topColor:"#111111",
+  topColorL:5,
+  repeat:20,
+  shuffle:true
+}
+
+var themes = [
+  {
+    name:"#1",
+    nameColor:"#E80000",
+    pallete:palleteRed, 
+    bg:"bg_red",
+    roughness:isIOS ? 0.3 : 0.5, 
+    metalness:0.1,
+    mapIntensity: isMobile ? (isIOS ? 2 : 6) : 12
+  },
+  {
+    name:"#2",
+    nameColor:"#111111",
+    pallete:palleteBlack, 
+    bg:"bg_black",
+    roughness:isIOS ? 0.3 : 0.5, 
+    metalness:0.5,
+    mapIntensity:isMobile ? (isIOS ? 2: 5) : 8
+  }
+]
+var tParam = new URLSearchParams(window.location.search).get("t")
+var themeIndex = tParam ? tParam : 1;
+var theme = themes[themeIndex];
+
+
+var scene, camera, renderer;
+var start;
+var mouse = {x:0, y:0, sx:0, sy:0, dx:0, dy:0};
+var textureLoader;
+var cubemap;
+var cubeRenderTarget;
+var cubeTexture;
+var capturer;
+var timeToStopRecord;
+var mousePos = []
+var clock;
+var loading;
+var palleteObj;
+
+
+var palleteImg;
+var palleteTexture;
+
+function init(){
+  console.clear()
+
+  loading = document.querySelector(".loading")
+
+  start = performance.now();
+
+  textureLoader = new THREE.TextureLoader();
+  
+  // menuThemes()
+  
+  palleteObj = theme.pallete
+  palleteImg = createPalleteImg(palleteObj);
+  palleteTexture = textureLoader.load(palleteImg);
+
+  
+  setup()
+  elements()  
+
+
+  render()
+  
+
+}
+
+function menuThemes(){
+  var menuEl = document.createElement("div")
+  menuEl.className = "theme_menu"
+  document.body.appendChild(menuEl);
+  for(var i = 0; i < themes.length; i++){
+    var el = document.createElement("a");
+    el.className = "theme_btn"
+    el.innerHTML = "<span>" + themes[i].name + "</span>"
+    el.style.background = themes[i].nameColor
+    el.setAttribute("href", window.location.origin + window.location.pathname + "?t="+ i)
+    menuEl.appendChild(el)
+  }
+}
+
+function setup(){
+  clock = new THREE.Clock(true);
+
+  document.body.className = theme.bg
+  scene = new THREE.Scene(); 
+
+  camera = new THREE.PerspectiveCamera(60, width / height, 1, 10000); 
+  camera.position.z = (Math.random() * 100) + 10;
+  
+  ambLight = new THREE.AmbientLight(0xaaaaaa, 2);
+  scene.add(ambLight)
+
+
+  renderer = new THREE.WebGLRenderer( {antialias:true, alpha: true} );
+  renderer.autoClear = false;
+  renderer.setPixelRatio = devicePixelRatio;
+  renderer.setSize(width, height);
+
+
+  document.body.appendChild(renderer.domElement)
+  
+  if(isMobile){
+    window.addEventListener("touchstart", inputstart, {passive:false})
+    window.addEventListener("touchmove", inputmove, {passive:false})
+    window.addEventListener("touchend", inputend, {passive:false})
+  }
+  else{
+    window.addEventListener("mousedown", inputstart)
+    window.addEventListener("mousemove", inputmove)
+    window.addEventListener("mouseup", inputend)
+  }
+
+  window.addEventListener("resize", resize)
+  resize()
+}
+
+function createPalleteImg(palleteObj){
+  var canvas = document.createElement("canvas");
+  var ctx = canvas.getContext("2d");
+
+  var pallete = expandPallete(palleteObj)
+
+  var texH = 1024;
+  var colorH = texH / pallete.length;
+
+  canvas.width = 1;
+  canvas.height = texH
+  
+  for(var i=0; i < pallete.length; i++){
+    ctx.fillStyle = pallete[i];
+    ctx.fillRect(0, colorH * i, canvas.width, colorH)
+
+  }
+
+  return canvas.toDataURL()
+
+}
+
+function expandPallete(palleteObj){
+  var pallete = []
+  for(var x=0; x < palleteObj.repeat; x++){
+    for(var i=0; i < palleteObj.colors.length; i++){
+      var colors = palleteObj.shuffle ? shuffle(palleteObj.colors.slice()) : palleteObj.colors;
+      var c = colors[i];
+      for(var j=0; j < c.l; j++){
+        pallete.push(c.c);
+      }
+    }
+  }
+  if(palleteObj.topColor){
+    for(var i=0; i < palleteObj.topColorL; i++)
+      pallete.push(palleteObj.topColor);
+  }
+  return pallete
+}
+
+function shuffle(o) {
+	for(var j, x, i = o.length; i; j = parseInt(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+	return o;
+};
+
+function elements(){
+  geometry = new THREE.IcosahedronBufferGeometry(width > height ? 22 : 15, icoQuality  );
+
+   if(isMobile) 
+    loadEnv('https://s3-us-west-2.amazonaws.com/s.cdpn.io/93719/Basic_Studio_wavelet.jpg')
+   else
+    loadExrEnv('https://s3-us-west-2.amazonaws.com/s.cdpn.io/93719/Basic_Studio_wavelet.exr')
+
+ 
+  icoMaterial = new MeshCustomMaterial({
+    roughness:theme.roughness,
+    metalness:theme.metalness,
+    envMapIntensity:theme.mapIntensity
+  },
+  {
+    tExplosion: {
+      type: "t",
+      value: palleteTexture
+    },
+    time: { 
+      type: "f",
+      value: 0.0
+    }
+  },
+  document.getElementById("vertex-ico-pbr").textContent,
+  document.getElementById("fragment-ico-pbr").textContent);
+ 
+
+  icoSphere = new THREE.Mesh(geometry, icoMaterial)
+  scene.add(icoSphere)
+}
+
+
+function loadEnv(url){
+  new THREE.TextureLoader().load(url, function ( texture ) {
+    
+    texture.format = THREE.RGBFormat;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+
+    var cubemapGenerator = new THREE.EquirectangularToCubeGenerator( texture, { resolution: 1024} );
+    var cubeMapTexture = cubemapGenerator.update( renderer );
+
+    var pmremGenerator = new THREE.PMREMGenerator( cubeMapTexture );
+    pmremGenerator.update( renderer );
+
+    var pmremCubeUVPacker = new THREE.PMREMCubeUVPacker( pmremGenerator.cubeLods );
+    pmremCubeUVPacker.update( renderer );
+
+    cubeRenderTarget = pmremCubeUVPacker.CubeUVRenderTarget;
+
+    texture.dispose();
+    cubemapGenerator.dispose();
+    pmremGenerator.dispose();
+    pmremCubeUVPacker.dispose();
+    
+    envLoaded()
+
+  } );
+}
+
+
+function loadExrEnv(url){
+  new THREE.EXRLoader().load( url, function ( texture ) {
+
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.encoding = THREE.LinearEncoding;
+    texture.generateMipmaps = true;
+    texture.mapping = THREE.UVMapping;
+
+    var cubemapGenerator = new THREE.EquirectangularToCubeGenerator( texture, { resolution: 1024, type: THREE.HalfFloatType } );
+    var cubeMapTexture = cubemapGenerator.update( renderer );
+
+    var pmremGenerator = new THREE.PMREMGenerator( cubeMapTexture );
+    pmremGenerator.update( renderer );
+
+
+    var pmremCubeUVPacker = new THREE.PMREMCubeUVPacker( pmremGenerator.cubeLods );
+    pmremCubeUVPacker.update( renderer );
+
+    cubeRenderTarget = pmremCubeUVPacker.CubeUVRenderTarget;
+
+    texture.dispose();
+    cubemapGenerator.dispose();
+    pmremGenerator.dispose();
+    pmremCubeUVPacker.dispose();
+    
+    envLoaded()
+
+
+  } );
+}
+
+function envLoaded(){
+  
+    scene.remove(ambLight)
+    icoMaterial.envMap = cubeRenderTarget.texture;
+    icoMaterial.needsUpdate=true;
+    loading.style.display = "none"
+}
+
+
+function inputstart(e){
+
+  inputmove(e);
+  mouse.dx = 0;
+  mouse.dy = 0;
+  mouse.sx = mouse.x;
+  mouse.sy = mouse.y;
+  
+  prevRotX = rotX;
+  prevRotY = rotY;
+  
+}
+
+function inputmove(e){
+
+  if(e.type == "touchmove")
+    e.preventDefault();
+
+  var x, y
+  if(e.type.indexOf("mouse") >= 0){
+    x = e.clientX;
+    y = e.clientY;
+  }else{
+    x = e.changedTouches[0].clientX
+    y = e.changedTouches[0].clientY
+  }
+  
+  mouse.x = (x / window.innerWidth) - 0.5
+  mouse.y = (y / window.innerHeight) - 0.5
+
+  mouse.dx = mouse.x - mouse.sx
+  mouse.dy = mouse.y - mouse.sy
+
+  
+}
+
+function inputend(e){
+  // e.preventDefault();
+
+}
+
+function resize(){
+  width = window.innerWidth
+  height = window.innerHeight
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize( width, height );
+
+}
+
+var changed=true;
+var rotX = 0;
+var rotY = 0;
+var prevRotX = 0
+var prevRotY = 0
+var rotXEase =0;
+var rotYEase =0;
+
+function render(){
+  requestAnimationFrame(render)
+
+  var dt = clock.getDelta();
+
+  var time = clock.getElapsedTime();
+
+  rotX = mouse.dy * 2 + prevRotX;
+  rotY = mouse.dx * 2 + prevRotY;
+  rotXEase += (rotX - rotXEase) * 0.1
+  rotYEase += (rotY - rotYEase) * 0.1
+  icoSphere.rotation.x = rotXEase;
+  icoSphere.rotation.y = rotYEase;
+
+  icoMaterial.uniforms[ 'time' ].value = time * 0.4
+  icoMaterial.uniforms[ 'tExplosion' ].value = palleteTexture;
+
+  renderer.render(scene, camera)
+
+
+    
+  
+}
+
+function MeshCustomMaterial (parameters, uniforms, vertexShader, fragmentShader) {
+  THREE.MeshStandardMaterial.call( this );
+  this.uniforms = THREE.UniformsUtils.merge([
+    THREE.ShaderLib.standard.uniforms,
+    uniforms
+  ]);
+  this.vertexShader = vertexShader;
+  this.fragmentShader = fragmentShader;
+  this.type = 'MeshCustomMaterial';
+  this.setValues(parameters);
+}
+
+MeshCustomMaterial.prototype = Object.create( THREE.MeshStandardMaterial.prototype );
+MeshCustomMaterial.prototype.constructor = MeshCustomMaterial;
+MeshCustomMaterial.prototype.isMeshStandardMaterial = true;
+
+
+
+window.onload = init
+
+/**
+ * @author Richard M. / https://github.com/richardmonette
+ *
+ * OpenEXR loader which, currently, supports reading 16 bit half data, in either
+ * uncompressed or PIZ wavelet compressed form.
+ *
+ * Referred to the original Industrial Light & Magic OpenEXR implementation and the TinyEXR / Syoyo Fujita
+ * implementation, so I have preserved their copyright notices.
+ */
+
+// /*
+// Copyright (c) 2014 - 2017, Syoyo Fujita
+// All rights reserved.
+
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the Syoyo Fujita nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+// DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// */
+
+// // TinyEXR contains some OpenEXR code, which is licensed under ------------
+
+// ///////////////////////////////////////////////////////////////////////////
+// //
+// // Copyright (c) 2002, Industrial Light & Magic, a division of Lucas
+// // Digital Ltd. LLC
+// //
+// // All rights reserved.
+// //
+// // Redistribution and use in source and binary forms, with or without
+// // modification, are permitted provided that the following conditions are
+// // met:
+// // *       Redistributions of source code must retain the above copyright
+// // notice, this list of conditions and the following disclaimer.
+// // *       Redistributions in binary form must reproduce the above
+// // copyright notice, this list of conditions and the following disclaimer
+// // in the documentation and/or other materials provided with the
+// // distribution.
+// // *       Neither the name of Industrial Light & Magic nor the names of
+// // its contributors may be used to endorse or promote products derived
+// // from this software without specific prior written permission.
+// //
+// // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// // "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// // LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// // A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// // OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// // SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// // LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// // DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// //
+// ///////////////////////////////////////////////////////////////////////////
+
+// // End of OpenEXR license -------------------------------------------------
+
+THREE.EXRLoader = function ( manager ) {
+
+	this.manager = ( manager !== undefined ) ? manager : THREE.DefaultLoadingManager;
+
+};
+
+THREE.EXRLoader.prototype = Object.create( THREE.DataTextureLoader.prototype );
+
+THREE.EXRLoader.prototype._parser = function ( buffer ) {
+
+	const USHORT_RANGE = (1 << 16);
+	const BITMAP_SIZE = (USHORT_RANGE >> 3);
+
+	const HUF_ENCBITS = 16;  // literal (value) bit length
+	const HUF_DECBITS = 14;  // decoding bit size (>= 8)
+
+	const HUF_ENCSIZE = (1 << HUF_ENCBITS) + 1;  // encoding table size
+	const HUF_DECSIZE = 1 << HUF_DECBITS;        // decoding table size
+	const HUF_DECMASK = HUF_DECSIZE - 1;
+
+	const SHORT_ZEROCODE_RUN = 59;
+	const LONG_ZEROCODE_RUN = 63;
+	const SHORTEST_LONG_RUN = 2 + LONG_ZEROCODE_RUN - SHORT_ZEROCODE_RUN;
+	const LONGEST_LONG_RUN = 255 + SHORTEST_LONG_RUN;
+
+	const BYTES_PER_HALF = 2;
+
+	const ULONG_SIZE = 8;
+	const FLOAT32_SIZE = 4;
+	const INT32_SIZE = 4;
+	const INT16_SIZE = 2;
+	const INT8_SIZE = 1;
+
+	function reverseLutFromBitmap( bitmap, lut ) {
+
+		var k = 0;
+
+		for ( var i = 0; i < USHORT_RANGE; ++ i ) {
+
+			if ( ( i == 0 ) || ( bitmap[ i >> 3 ] & ( 1 << ( i & 7 ) ) ) ) {
+
+				lut[ k ++ ] = i;
+
+			}
+
+		}
+
+		var n = k - 1;
+
+		while ( k < USHORT_RANGE ) lut[ k ++ ] = 0;
+
+		return n;
+
+	}
+
+	function hufClearDecTable( hdec ) {
+
+		for ( var i = 0; i < HUF_DECSIZE; i ++ ) {
+
+			hdec[ i ] = {};
+			hdec[ i ].len = 0;
+			hdec[ i ].lit = 0;
+			hdec[ i ].p = null;
+
+		}
+
+	}
+
+	const getBitsReturn = { l: 0, c: 0, lc: 0 };
+
+	function getBits( nBits, c, lc, uInt8Array, inOffset ) {
+
+		while ( lc < nBits ) {
+
+			c = ( c << 8 ) | parseUint8Array( uInt8Array, inOffset );
+			lc += 8;
+
+		}
+
+		lc -= nBits;
+
+		getBitsReturn.l = ( c >> lc ) & ( ( 1 << nBits ) - 1 );
+		getBitsReturn.c = c;
+		getBitsReturn.lc = lc;
+	}
+
+	const hufTableBuffer = new Array( 59 );
+
+	function hufCanonicalCodeTable( hcode ) {
+
+		for ( var i = 0; i <= 58; ++ i ) hufTableBuffer[ i ] = 0;
+		for ( var i = 0; i < HUF_ENCSIZE; ++ i ) hufTableBuffer[ hcode[ i ] ] += 1;
+
+		var c = 0;
+
+		for ( var i = 58; i > 0; -- i ) {
+
+			var nc = ( ( c + hufTableBuffer[ i ] ) >> 1 );
+			hufTableBuffer[ i ] = c;
+			c = nc;
+
+		}
+
+		for ( var i = 0; i < HUF_ENCSIZE; ++ i ) {
+
+			var l = hcode[ i ];
+			if ( l > 0 ) hcode[ i ] = l | ( hufTableBuffer[ l ] ++ << 6 );
+
+		}
+
+	}
+
+	function hufUnpackEncTable( uInt8Array, inDataView, inOffset, ni, im, iM, hcode ) {
+
+		var p = inOffset;
+		var c = 0;
+		var lc = 0;
+
+		for ( ; im <= iM; im ++ ) {
+
+			if ( p.value - inOffset.value > ni ) return false;
+
+			getBits( 6, c, lc, uInt8Array, p );
+
+			var l = getBitsReturn.l;
+			c = getBitsReturn.c;
+			lc = getBitsReturn.lc;
+
+			hcode[ im ] = l;
+
+			if ( l == LONG_ZEROCODE_RUN ) {
+
+				if ( p.value - inOffset.value > ni ) {
+
+					throw 'Something wrong with hufUnpackEncTable';
+
+				}
+
+				getBits( 8, c, lc, uInt8Array, p );
+
+				var zerun = getBitsReturn.l + SHORTEST_LONG_RUN;
+				c = getBitsReturn.c;
+				lc = getBitsReturn.lc;
+
+				if ( im + zerun > iM + 1 ) {
+
+					throw 'Something wrong with hufUnpackEncTable';
+
+				}
+
+				while ( zerun -- ) hcode[ im ++ ] = 0;
+
+				im --;
+
+			} else if ( l >= SHORT_ZEROCODE_RUN ) {
+
+				var zerun = l - SHORT_ZEROCODE_RUN + 2;
+
+				if ( im + zerun > iM + 1 ) {
+
+					throw 'Something wrong with hufUnpackEncTable';
+
+				}
+
+				while ( zerun -- ) hcode[ im ++ ] = 0;
+
+				im --;
+
+			}
+
+		}
+
+		hufCanonicalCodeTable( hcode );
+
+	}
+
+	function hufLength( code ) { return code & 63; }
+
+	function hufCode( code ) { return code >> 6; }
+
+	function hufBuildDecTable( hcode, im, iM, hdecod ) {
+
+		for ( ; im <= iM; im ++ ) {
+
+			var c = hufCode( hcode[ im ] );
+			var l = hufLength( hcode[ im ] );
+
+			if ( c >> l ) {
+
+				throw 'Invalid table entry';
+
+			}
+
+			if ( l > HUF_DECBITS ) {
+
+				var pl = hdecod[ ( c >> ( l - HUF_DECBITS ) ) ];
+
+				if ( pl.len ) {
+
+					throw 'Invalid table entry';
+
+				}
+
+				pl.lit ++;
+
+				if ( pl.p ) {
+
+					var p = pl.p;
+					pl.p = new Array( pl.lit );
+
+					for ( var i = 0; i < pl.lit - 1; ++ i ) {
+
+						pl.p[ i ] = p[ i ];
+
+					}
+
+				} else {
+
+					pl.p = new Array( 1 );
+
+				}
+
+				pl.p[ pl.lit - 1 ] = im;
+
+			} else if ( l ) {
+
+				var plOffset = 0;
+
+				for ( var i = 1 << ( HUF_DECBITS - l ); i > 0; i -- ) {
+
+					var pl = hdecod[ ( c << ( HUF_DECBITS - l ) ) + plOffset ];
+
+					if ( pl.len || pl.p ) {
+
+						throw 'Invalid table entry';
+
+					}
+
+					pl.len = l;
+					pl.lit = im;
+
+					plOffset ++;
+
+				}
+
+			}
+
+		}
+
+		return true;
+
+	}
+
+	const getCharReturn = { c: 0, lc: 0 };
+
+	function getChar( c, lc, uInt8Array, inOffset ) {
+
+		c = ( c << 8 ) | parseUint8Array( uInt8Array, inOffset );
+		lc += 8;
+
+		getCharReturn.c = c;
+		getCharReturn.lc = lc;
+
+	}
+
+	const getCodeReturn = { c: 0, lc: 0 };
+
+	function getCode( po, rlc, c, lc, uInt8Array, inDataView, inOffset, outBuffer, outBufferOffset, outBufferEndOffset ) {
+
+		if ( po == rlc ) {
+
+			if ( lc < 8 ) {
+
+				getChar( c, lc, uInt8Array, inOffset );
+				c = getCharReturn.c;
+				lc = getCharReturn.lc;
+
+			}
+
+			lc -= 8;
+
+			var cs = ( c >> lc );
+			var cs = new Uint8Array([cs])[0];
+
+			if ( outBufferOffset.value + cs > outBufferEndOffset ) {
+
+				return false;
+
+			}
+
+			var s = outBuffer[ outBufferOffset.value - 1 ];
+
+			while ( cs-- > 0 ) {
+
+				outBuffer[ outBufferOffset.value ++ ] = s;
+
+			}
+
+		} else if ( outBufferOffset.value < outBufferEndOffset ) {
+
+			outBuffer[ outBufferOffset.value ++ ] = po;
+
+		} else {
+
+			return false;
+
+		}
+
+		getCodeReturn.c = c;
+		getCodeReturn.lc = lc;
+
+	}
+
+	var NBITS = 16;
+	var A_OFFSET = 1 << ( NBITS - 1 );
+	var M_OFFSET = 1 << ( NBITS - 1 );
+	var MOD_MASK = ( 1 << NBITS ) - 1;
+
+	function UInt16( value ) {
+
+		return ( value & 0xFFFF );
+
+	}
+
+	function Int16( value ) {
+
+		var ref = UInt16( value );
+		return ( ref > 0x7FFF ) ? ref - 0x10000 : ref;
+
+	}
+
+	const wdec14Return = { a: 0, b: 0 };
+
+	function wdec14( l, h ) {
+
+		var ls = Int16( l );
+		var hs = Int16( h );
+
+		var hi = hs;
+		var ai = ls + ( hi & 1 ) + ( hi >> 1 );
+
+		var as = ai;
+		var bs = ai - hi;
+
+		wdec14Return.a = as;
+		wdec14Return.b = bs;
+
+	}
+
+	function wav2Decode( j, buffer, nx, ox, ny, oy, mx ) {
+
+		var n = ( nx > ny ) ? ny : nx;
+		var p = 1;
+		var p2;
+
+		while ( p <= n ) p <<= 1;
+
+		p >>= 1;
+		p2 = p;
+		p >>= 1;
+
+		while ( p >= 1 ) {
+
+			var py = 0;
+			var ey = py + oy * ( ny - p2 );
+			var oy1 = oy * p;
+			var oy2 = oy * p2;
+			var ox1 = ox * p;
+			var ox2 = ox * p2;
+			var i00, i01, i10, i11;
+
+			for ( ; py <= ey; py += oy2 ) {
+
+				var px = py;
+				var ex = py + ox * ( nx - p2 );
+
+				for ( ; px <= ex; px += ox2 ) {
+
+					var p01 = px + ox1;
+					var p10 = px + oy1;
+					var p11 = p10 + ox1;
+
+					wdec14( buffer[ px + j ], buffer[ p10 + j ] );
+
+					i00 = wdec14Return.a;
+					i10 = wdec14Return.b;
+
+					wdec14( buffer[ p01 + j ], buffer[ p11 + j ] );
+
+					i01 = wdec14Return.a;
+					i11 = wdec14Return.b;
+
+					wdec14( i00, i01 );
+
+					buffer[ px + j ] = wdec14Return.a;
+					buffer[ p01 + j ] = wdec14Return.b;
+
+					wdec14( i10, i11 );
+
+					buffer[ p10 + j ] = wdec14Return.a;
+					buffer[ p11 + j ] = wdec14Return.b;
+
+				}
+
+				if ( nx & p ) {
+
+					var p10 = px + oy1;
+
+					wdec14( buffer[ px + j ], buffer[ p10 + j ] );
+
+					i00 = wdec14Return.a;
+					buffer[ p10 + j ] = wdec14Return.b;
+
+					buffer[ px + j ] = i00;
+
+				}
+
+			}
+
+			if ( ny & p ) {
+
+				var px = py;
+				var ex = py + ox * ( nx - p2 );
+
+				for ( ; px <= ex; px += ox2 ) {
+
+					var p01 = px + ox1;
+
+					wdec14( buffer[ px + j ], buffer[ p01 + j ] );
+
+					i00 = wdec14Return.a;
+					buffer[ p01 + j ] = wdec14Return.b;
+
+					buffer[ px + j ] = i00;
+
+				}
+
+			}
+
+			p2 = p;
+			p >>= 1;
+
+		}
+
+		return py;
+
+	}
+
+	function hufDecode( encodingTable, decodingTable, uInt8Array, inDataView, inOffset, ni, rlc, no, outBuffer, outOffset ) {
+
+		var c = 0;
+		var lc = 0;
+		var outBufferEndOffset = no;
+		var inOffsetEnd = Math.trunc( inOffset.value + ( ni + 7 ) / 8 );
+
+		while ( inOffset.value < inOffsetEnd ) {
+
+			getChar( c, lc, uInt8Array, inOffset );
+
+			c = getCharReturn.c;
+			lc = getCharReturn.lc;
+
+			while ( lc >= HUF_DECBITS ) {
+
+				var index = ( c >> ( lc - HUF_DECBITS ) ) & HUF_DECMASK;
+				var pl = decodingTable[ index ];
+
+				if ( pl.len ) {
+
+					lc -= pl.len;
+
+					getCode( pl.lit, rlc, c, lc, uInt8Array, inDataView, inOffset, outBuffer, outOffset, outBufferEndOffset );
+
+					c = getCodeReturn.c;
+					lc = getCodeReturn.lc;
+
+				} else {
+
+					if ( ! pl.p ) {
+
+						throw 'hufDecode issues';
+
+					}
+
+					var j;
+
+					for ( j = 0; j < pl.lit; j ++ ) {
+
+						var l = hufLength( encodingTable[ pl.p[ j ] ] );
+
+						while ( lc < l && inOffset.value < inOffsetEnd ) {
+
+							getChar( c, lc, uInt8Array, inOffset );
+
+							c = getCharReturn.c;
+							lc = getCharReturn.lc;
+
+						}
+
+						if ( lc >= l ) {
+
+							if ( hufCode( encodingTable[ pl.p[ j ] ] ) == ( ( c >> ( lc - l ) ) & ( ( 1 << l ) - 1 ) ) ) {
+
+								lc -= l;
+
+								getCode( pl.p[ j ], rlc, c, lc, uInt8Array, inDataView, inOffset, outBuffer, outOffset, outBufferEndOffset );
+
+								c = getCodeReturn.c;
+								lc = getCodeReturn.lc;
+
+								break;
+
+							}
+
+						}
+
+					}
+
+					if ( j == pl.lit ) {
+
+						throw 'hufDecode issues';
+
+					}
+
+				}
+
+			}
+
+		}
+
+		var i = ( 8 - ni ) & 7;
+
+		c >>= i;
+		lc -= i;
+
+		while ( lc > 0 ) {
+
+			var pl = decodingTable[ ( c << ( HUF_DECBITS - lc ) ) & HUF_DECMASK ];
+
+			if ( pl.len ) {
+
+				lc -= pl.len;
+
+				getCode( pl.lit, rlc, c, lc, uInt8Array, inDataView, inOffset, outBuffer, outOffset, outBufferEndOffset );
+
+				c = getCodeReturn.c;
+				lc = getCodeReturn.lc;
+
+			} else {
+
+				throw 'hufDecode issues';
+
+			}
+
+		}
+
+		return true;
+
+	}
+
+	function hufUncompress( uInt8Array, inDataView, inOffset, nCompressed, outBuffer, outOffset, nRaw ) {
+
+		var initialInOffset = inOffset.value;
+
+		var im = parseUint32( inDataView, inOffset );
+		var iM = parseUint32( inDataView, inOffset );
+
+		inOffset.value += 4;
+
+		var nBits = parseUint32( inDataView, inOffset );
+
+		inOffset.value += 4;
+
+		if ( im < 0 || im >= HUF_ENCSIZE || iM < 0 || iM >= HUF_ENCSIZE ) {
+
+			throw 'Something wrong with HUF_ENCSIZE';
+
+		}
+
+		var freq = new Array( HUF_ENCSIZE );
+		var hdec = new Array( HUF_DECSIZE );
+
+		hufClearDecTable( hdec );
+
+		var ni = nCompressed - ( inOffset.value - initialInOffset );
+
+		hufUnpackEncTable( uInt8Array, inDataView, inOffset, ni, im, iM, freq );
+
+		if ( nBits > 8 * ( nCompressed - ( inOffset.value - initialInOffset ) ) ) {
+
+			throw 'Something wrong with hufUncompress';
+
+		}
+
+		hufBuildDecTable( freq, im, iM, hdec );
+
+		hufDecode( freq, hdec, uInt8Array, inDataView, inOffset, nBits, iM, nRaw, outBuffer, outOffset );
+
+	}
+
+	function applyLut( lut, data, nData ) {
+
+		for ( var i = 0; i < nData; ++ i ) {
+
+			data[ i ] = lut[ data[ i ] ];
+
+		}
+
+	}
+
+	function decompressPIZ( outBuffer, outOffset, uInt8Array, inDataView, inOffset, tmpBufSize, num_channels, exrChannelInfos, dataWidth, num_lines ) {
+
+		var bitmap = new Uint8Array( BITMAP_SIZE );
+
+		var minNonZero = parseUint16( inDataView, inOffset );
+		var maxNonZero = parseUint16( inDataView, inOffset );
+
+		if ( maxNonZero >= BITMAP_SIZE ) {
+
+			throw 'Something is wrong with PIZ_COMPRESSION BITMAP_SIZE';
+
+		}
+
+		if ( minNonZero <= maxNonZero ) {
+
+			for ( var i = 0; i < maxNonZero - minNonZero + 1; i ++ ) {
+
+				bitmap[ i + minNonZero ] = parseUint8( inDataView, inOffset );
+
+			}
+
+		}
+
+		var lut = new Uint16Array( USHORT_RANGE );
+		var maxValue = reverseLutFromBitmap( bitmap, lut );
+
+		var length = parseUint32( inDataView, inOffset );
+
+		hufUncompress( uInt8Array, inDataView, inOffset, length, outBuffer, outOffset, tmpBufSize );
+
+		var pizChannelData = new Array( num_channels );
+
+		var outBufferEnd = 0;
+
+		for ( var i = 0; i < num_channels; i ++ ) {
+
+			var exrChannelInfo = exrChannelInfos[ i ];
+
+			var pixelSize = 2; // assumes HALF_FLOAT
+
+			pizChannelData[ i ] = {};
+			pizChannelData[ i ][ 'start' ] = outBufferEnd;
+			pizChannelData[ i ][ 'end' ] = pizChannelData[ i ][ 'start' ];
+			pizChannelData[ i ][ 'nx' ] = dataWidth;
+			pizChannelData[ i ][ 'ny' ] = num_lines;
+			pizChannelData[ i ][ 'size' ] = 1;
+
+			outBufferEnd += pizChannelData[ i ].nx * pizChannelData[ i ].ny * pizChannelData[ i ].size;
+
+		}
+
+		var fooOffset = 0;
+
+		for ( var i = 0; i < num_channels; i ++ ) {
+
+			for ( var j = 0; j < pizChannelData[ i ].size; ++ j ) {
+
+				fooOffset += wav2Decode(
+					j + fooOffset,
+					outBuffer,
+					pizChannelData[ i ].nx,
+					pizChannelData[ i ].size,
+					pizChannelData[ i ].ny,
+					pizChannelData[ i ].nx * pizChannelData[ i ].size,
+					maxValue
+				);
+
+			}
+
+		}
+
+		applyLut( lut, outBuffer, outBufferEnd );
+
+		return true;
+
+	}
+
+	function parseNullTerminatedString( buffer, offset ) {
+
+		var uintBuffer = new Uint8Array( buffer );
+		var endOffset = 0;
+
+		while ( uintBuffer[ offset.value + endOffset ] != 0 ) {
+
+			endOffset += 1;
+
+		}
+
+		var stringValue = new TextDecoder().decode(
+			uintBuffer.slice( offset.value, offset.value + endOffset )
+		);
+
+		offset.value = offset.value + endOffset + 1;
+
+		return stringValue;
+
+	}
+
+	function parseFixedLengthString( buffer, offset, size ) {
+
+		var stringValue = new TextDecoder().decode(
+			new Uint8Array( buffer ).slice( offset.value, offset.value + size )
+		);
+
+		offset.value = offset.value + size;
+
+		return stringValue;
+
+	}
+
+	function parseUlong( dataView, offset ) {
+
+		var uLong = dataView.getUint32( 0, true );
+
+		offset.value = offset.value + ULONG_SIZE;
+
+		return uLong;
+
+	}
+
+	function parseUint32( dataView, offset ) {
+
+		var Uint32 = dataView.getUint32(offset.value, true);
+
+		offset.value = offset.value + INT32_SIZE;
+
+		return Uint32;
+
+	}
+
+	function parseUint8Array( uInt8Array, offset ) {
+
+		var Uint8 = uInt8Array[offset.value];
+
+		offset.value = offset.value + INT8_SIZE;
+
+		return Uint8;
+
+	}
+
+	function parseUint8( dataView, offset ) {
+
+		var Uint8 = dataView.getUint8(offset.value);
+
+		offset.value = offset.value + INT8_SIZE;
+
+		return Uint8;
+
+	}
+
+	function parseFloat32( dataView, offset ) {
+
+		var float = dataView.getFloat32(offset.value, true);
+
+		offset.value += FLOAT32_SIZE;
+
+		return float;
+
+	}
+
+	// https://stackoverflow.com/questions/5678432/decompressing-half-precision-floats-in-javascript
+	function decodeFloat16( binary ) {
+
+		var exponent = ( binary & 0x7C00 ) >> 10,
+			fraction = binary & 0x03FF;
+
+		return ( binary >> 15 ? - 1 : 1 ) * (
+			exponent ?
+				(
+					exponent === 0x1F ?
+						fraction ? NaN : Infinity :
+						Math.pow( 2, exponent - 15 ) * ( 1 + fraction / 0x400 )
+				) :
+				6.103515625e-5 * ( fraction / 0x400 )
+		);
+
+	}
+
+	function parseUint16( dataView, offset ) {
+
+		var Uint16 = dataView.getUint16( offset.value, true );
+
+		offset.value += INT16_SIZE;
+
+		return Uint16;
+
+	}
+
+	function parseFloat16( buffer, offset ) {
+
+		return decodeFloat16( parseUint16( buffer, offset) );
+
+	}
+
+	function parseChlist( dataView, buffer, offset, size ) {
+
+		var startOffset = offset.value;
+		var channels = [];
+
+		while ( offset.value < ( startOffset + size - 1 ) ) {
+
+			var name = parseNullTerminatedString( buffer, offset );
+			var pixelType = parseUint32( dataView, offset ); // TODO: Cast this to UINT, HALF or FLOAT
+			var pLinear = parseUint8( dataView, offset );
+			offset.value += 3; // reserved, three chars
+			var xSampling = parseUint32( dataView, offset );
+			var ySampling = parseUint32( dataView, offset );
+
+			channels.push( {
+				name: name,
+				pixelType: pixelType,
+				pLinear: pLinear,
+				xSampling: xSampling,
+				ySampling: ySampling
+			} );
+
+		}
+
+		offset.value += 1;
+
+		return channels;
+
+	}
+
+	function parseChromaticities( dataView, offset ) {
+
+		var redX = parseFloat32( dataView, offset );
+		var redY = parseFloat32( dataView, offset );
+		var greenX = parseFloat32( dataView, offset );
+		var greenY = parseFloat32( dataView, offset );
+		var blueX = parseFloat32( dataView, offset );
+		var blueY = parseFloat32( dataView, offset );
+		var whiteX = parseFloat32( dataView, offset );
+		var whiteY = parseFloat32( dataView, offset );
+
+		return { redX: redX, redY: redY, greenX: greenX, greenY: greenY, blueX: blueX, blueY: blueY, whiteX: whiteX, whiteY: whiteY };
+
+	}
+
+	function parseCompression( dataView, offset ) {
+
+		var compressionCodes = [
+			'NO_COMPRESSION',
+			'RLE_COMPRESSION',
+			'ZIPS_COMPRESSION',
+			'ZIP_COMPRESSION',
+			'PIZ_COMPRESSION'
+		];
+
+		var compression = parseUint8( dataView, offset );
+
+		return compressionCodes[ compression ];
+
+	}
+
+	function parseBox2i( dataView, offset ) {
+
+		var xMin = parseUint32( dataView, offset );
+		var yMin = parseUint32( dataView, offset );
+		var xMax = parseUint32( dataView, offset );
+		var yMax = parseUint32( dataView, offset );
+
+		return { xMin: xMin, yMin: yMin, xMax: xMax, yMax: yMax };
+
+	}
+
+	function parseLineOrder( dataView, offset ) {
+
+		var lineOrders = [
+			'INCREASING_Y'
+		];
+
+		var lineOrder = parseUint8( dataView, offset );
+
+		return lineOrders[ lineOrder ];
+
+	}
+
+	function parseV2f( dataView, offset ) {
+
+		var x = parseFloat32( dataView, offset );
+		var y = parseFloat32( dataView, offset );
+
+		return [ x, y ];
+
+	}
+
+	function parseValue( dataView, buffer, offset, type, size ) {
+
+		if ( type === 'string' || type === 'iccProfile' ) {
+
+			return parseFixedLengthString( buffer, offset, size );
+
+		} else if ( type === 'chlist' ) {
+
+			return parseChlist( dataView, buffer, offset, size );
+
+		} else if ( type === 'chromaticities' ) {
+
+			return parseChromaticities( dataView, offset );
+
+		} else if ( type === 'compression' ) {
+
+			return parseCompression( dataView, offset );
+
+		} else if ( type === 'box2i' ) {
+
+			return parseBox2i( dataView, offset );
+
+		} else if ( type === 'lineOrder' ) {
+
+			return parseLineOrder( dataView, offset );
+
+		} else if ( type === 'float' ) {
+
+			return parseFloat32( dataView, offset );
+
+		} else if ( type === 'v2f' ) {
+
+			return parseV2f( dataView, offset );
+
+		} else if ( type === 'int' ) {
+
+			return parseUint32( dataView, offset );
+
+		} else {
+
+			throw 'Cannot parse value for unsupported type: ' + type;
+
+		}
+
+	}
+
+	var bufferDataView = new DataView(buffer);
+	var uInt8Array = new Uint8Array(buffer);
+
+	var EXRHeader = {};
+
+	var magic = bufferDataView.getUint32( 0, true );
+	var versionByteZero = bufferDataView.getUint8( 4, true );
+	var fullMask = bufferDataView.getUint8( 5, true );
+
+	// start of header
+
+	var offset = { value: 8 }; // start at 8, after magic stuff
+
+	var keepReading = true;
+
+	while ( keepReading ) {
+
+		var attributeName = parseNullTerminatedString( buffer, offset );
+
+		if ( attributeName == 0 ) {
+
+			keepReading = false;
+
+		} else {
+
+			var attributeType = parseNullTerminatedString( buffer, offset );
+			var attributeSize = parseUint32( bufferDataView, offset );
+			var attributeValue = parseValue( bufferDataView, buffer, offset, attributeType, attributeSize );
+
+			EXRHeader[ attributeName ] = attributeValue;
+
+		}
+
+	}
+
+	// offsets
+
+	var dataWindowHeight = EXRHeader.dataWindow.yMax + 1;
+	var scanlineBlockSize = 1; // 1 for NO_COMPRESSION
+
+	if ( EXRHeader.compression === 'PIZ_COMPRESSION' ) {
+
+		scanlineBlockSize = 32;
+
+	}
+
+	var numBlocks = dataWindowHeight / scanlineBlockSize;
+
+	for ( var i = 0; i < numBlocks; i ++ ) {
+
+		var scanlineOffset = parseUlong( bufferDataView, offset );
+
+	}
+
+	// we should be passed the scanline offset table, start reading pixel data
+
+	var width = EXRHeader.dataWindow.xMax - EXRHeader.dataWindow.xMin + 1;
+	var height = EXRHeader.dataWindow.yMax - EXRHeader.dataWindow.yMin + 1;
+	var numChannels = EXRHeader.channels.length;
+
+	var byteArray = new Float32Array( width * height * numChannels );
+
+	var channelOffsets = {
+		R: 0,
+		G: 1,
+		B: 2,
+		A: 3
+	};
+
+	if ( EXRHeader.compression === 'NO_COMPRESSION' ) {
+
+		for ( var y = 0; y < height; y ++ ) {
+
+			var y_scanline = parseUint32( bufferDataView, offset );
+			var dataSize = parseUint32( bufferDataView, offset );
+
+			for ( var channelID = 0; channelID < EXRHeader.channels.length; channelID ++ ) {
+
+				var cOff = channelOffsets[ EXRHeader.channels[ channelID ].name ];
+
+				if ( EXRHeader.channels[ channelID ].pixelType === 1 ) {
+
+					// HALF
+					for ( var x = 0; x < width; x ++ ) {
+
+						var val = parseFloat16( bufferDataView, offset );
+
+						byteArray[ ( ( ( height - y_scanline ) * ( width * numChannels ) ) + ( x * numChannels ) ) + cOff ] = val;
+
+					}
+
+				} else {
+
+					throw 'Only supported pixel format is HALF';
+
+				}
+
+			}
+
+		}
+
+	} else if ( EXRHeader.compression === 'PIZ_COMPRESSION' ) {
+
+		for ( var scanlineBlockIdx = 0; scanlineBlockIdx < height / scanlineBlockSize; scanlineBlockIdx ++ ) {
+
+			var line_no = parseUint32( bufferDataView, offset );
+			var data_len = parseUint32( bufferDataView, offset );
+
+			var tmpBufferSize = width * scanlineBlockSize * ( EXRHeader.channels.length * BYTES_PER_HALF );
+			var tmpBuffer = new Uint16Array( tmpBufferSize );
+			var tmpOffset = { value: 0 };
+
+			decompressPIZ( tmpBuffer, tmpOffset, uInt8Array, bufferDataView, offset, tmpBufferSize, numChannels, EXRHeader.channels, width, scanlineBlockSize );
+
+			for ( var line_y = 0; line_y < scanlineBlockSize; line_y ++ ) {
+
+				for ( var channelID = 0; channelID < EXRHeader.channels.length; channelID ++ ) {
+
+					var cOff = channelOffsets[ EXRHeader.channels[ channelID ].name ];
+
+					if ( EXRHeader.channels[ channelID ].pixelType === 1 ) {
+
+						// HALF
+						for ( var x = 0; x < width; x ++ ) {
+
+							var val = decodeFloat16( tmpBuffer[ ( channelID * ( scanlineBlockSize * width ) ) + ( line_y * width ) + x ] );
+
+							var true_y = line_y + ( scanlineBlockIdx * scanlineBlockSize );
+
+							byteArray[ ( ( ( height - true_y ) * ( width * numChannels ) ) + ( x * numChannels ) ) + cOff ] = val;
+
+						}
+
+					} else {
+
+						throw 'Only supported pixel format is HALF';
+
+					}
+
+				}
+
+			}
+
+		}
+
+	} else {
+
+		throw 'Cannot decompress unsupported compression';
+
+	}
+
+	return {
+		header: EXRHeader,
+		width: width,
+		height: height,
+		data: byteArray,
+		format: EXRHeader.channels.length == 4 ? THREE.RGBAFormat : THREE.RGBFormat,
+		type: THREE.FloatType
+	};
+
+};
+
+
+/**
+* @author Richard M. / https://github.com/richardmonette
+*/
+
+THREE.EquirectangularToCubeGenerator = function ( sourceTexture, options ) {
+
+	this.sourceTexture = sourceTexture;
+	this.resolution = options.resolution || 512;
+
+ 	this.views = [
+		{ t: [ 1, 0, 0 ], u: [ 0, - 1, 0 ] },
+		{ t: [ - 1, 0, 0 ], u: [ 0, - 1, 0 ] },
+		{ t: [ 0, 1, 0 ], u: [ 0, 0, 1 ] },
+		{ t: [ 0, - 1, 0 ], u: [ 0, 0, - 1 ] },
+		{ t: [ 0, 0, 1 ], u: [ 0, - 1, 0 ] },
+		{ t: [ 0, 0, - 1 ], u: [ 0, - 1, 0 ] },
+	];
+
+	this.camera = new THREE.PerspectiveCamera( 90, 1, 0.1, 10 );
+	this.boxMesh = new THREE.Mesh( new THREE.BoxBufferGeometry( 1, 1, 1 ), this.getShader() );
+	this.boxMesh.material.side = THREE.BackSide;
+	this.scene = new THREE.Scene();
+	this.scene.add( this.boxMesh );
+
+	var params = {
+		format: options.format || this.sourceTexture.format,
+		magFilter: this.sourceTexture.magFilter,
+		minFilter: this.sourceTexture.minFilter,
+		type: options.type || this.sourceTexture.type,
+		generateMipmaps: this.sourceTexture.generateMipmaps,
+		anisotropy: this.sourceTexture.anisotropy,
+		encoding: this.sourceTexture.encoding
+	};
+
+	this.renderTarget = new THREE.WebGLRenderTargetCube( this.resolution, this.resolution, params );
+
+};
+
+THREE.EquirectangularToCubeGenerator.prototype = {
+
+	constructor: THREE.EquirectangularToCubeGenerator,
+
+	update: function ( renderer ) {
+
+		for ( var i = 0; i < 6; i ++ ) {
+
+			this.renderTarget.activeCubeFace = i;
+
+			var v = this.views[ i ];
+
+			this.camera.position.set( 0, 0, 0 );
+			this.camera.up.set( v.u[ 0 ], v.u[ 1 ], v.u[ 2 ] );
+			this.camera.lookAt( v.t[ 0 ], v.t[ 1 ], v.t[ 2 ] );
+
+			renderer.render( this.scene, this.camera, this.renderTarget, true );
+
+		}
+
+		return this.renderTarget.texture;
+
+	},
+
+	getShader: function () {
+
+		var shaderMaterial = new THREE.ShaderMaterial( {
+
+			uniforms: {
+				"equirectangularMap": { value: this.sourceTexture },
+			},
+
+			vertexShader:
+				"varying vec3 localPosition;\n\
+				\n\
+				void main() {\n\
+					localPosition = position;\n\
+					gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n\
+				}",
+
+			fragmentShader:
+				"#include <common>\n\
+				varying vec3 localPosition;\n\
+				uniform sampler2D equirectangularMap;\n\
+				\n\
+				vec2 EquirectangularSampleUV(vec3 v) {\n\
+			    vec2 uv = vec2(atan(v.z, v.x), asin(v.y));\n\
+			    uv *= vec2(0.1591, 0.3183); // inverse atan\n\
+			    uv += 0.5;\n\
+			    return uv;\n\
+				}\n\
+				\n\
+				void main() {\n\
+					vec2 uv = EquirectangularSampleUV(normalize(localPosition));\n\
+					gl_FragColor = texture2D(equirectangularMap, uv);\n\
+				}",
+
+			blending: THREE.NoBlending
+
+		} );
+
+		shaderMaterial.type = 'EquirectangularToCubeGenerator';
+
+		return shaderMaterial;
+
+	},
+
+	dispose: function () {
+
+		this.boxMesh.geometry.dispose();
+		this.boxMesh.material.dispose();
+		this.renderTarget.dispose();
+
+	}
+
+};
+
+/**
+ * @author Prashant Sharma / spidersharma03
+ * @author Ben Houston / bhouston, https://clara.io
+ *
+ * To avoid cube map seams, I create an extra pixel around each face. This way when the cube map is
+ * sampled by an application later(with a little care by sampling the centre of the texel), the extra 1 border
+ *	of pixels makes sure that there is no seams artifacts present. This works perfectly for cubeUV format as
+ *	well where the 6 faces can be arranged in any manner whatsoever.
+ * Code in the beginning of fragment shader's main function does this job for a given resolution.
+ *	Run Scene_PMREM_Test.html in the examples directory to see the sampling from the cube lods generated
+ *	by this class.
+ */
+
+THREE.PMREMGenerator = function ( sourceTexture, samplesPerLevel, resolution ) {
+
+	this.sourceTexture = sourceTexture;
+	this.resolution = ( resolution !== undefined ) ? resolution : 256; // NODE: 256 is currently hard coded in the glsl code for performance reasons
+	this.samplesPerLevel = ( samplesPerLevel !== undefined ) ? samplesPerLevel : 16;
+
+	var monotonicEncoding = ( sourceTexture.encoding === THREE.LinearEncoding ) ||
+		( sourceTexture.encoding === THREE.GammaEncoding ) || ( sourceTexture.encoding === THREE.sRGBEncoding );
+
+	this.sourceTexture.minFilter = ( monotonicEncoding ) ? THREE.LinearFilter : THREE.NearestFilter;
+	this.sourceTexture.magFilter = ( monotonicEncoding ) ? THREE.LinearFilter : THREE.NearestFilter;
+	this.sourceTexture.generateMipmaps = this.sourceTexture.generateMipmaps && monotonicEncoding;
+
+	this.cubeLods = [];
+
+	var size = this.resolution;
+	var params = {
+		format: this.sourceTexture.format,
+		magFilter: this.sourceTexture.magFilter,
+		minFilter: this.sourceTexture.minFilter,
+		type: this.sourceTexture.type,
+		generateMipmaps: this.sourceTexture.generateMipmaps,
+		anisotropy: this.sourceTexture.anisotropy,
+		encoding: this.sourceTexture.encoding
+	 };
+
+	// how many LODs fit in the given CubeUV Texture.
+	this.numLods = Math.log( size ) / Math.log( 2 ) - 2; // IE11 doesn't support Math.log2
+
+	for ( var i = 0; i < this.numLods; i ++ ) {
+
+		var renderTarget = new THREE.WebGLRenderTargetCube( size, size, params );
+		renderTarget.texture.name = "PMREMGenerator.cube" + i;
+		this.cubeLods.push( renderTarget );
+		size = Math.max( 16, size / 2 );
+
+	}
+
+	this.camera = new THREE.OrthographicCamera( - 1, 1, 1, - 1, 0.0, 1000 );
+
+	this.shader = this.getShader();
+	this.shader.defines[ 'SAMPLES_PER_LEVEL' ] = this.samplesPerLevel;
+	this.planeMesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2, 0 ), this.shader );
+	this.planeMesh.material.side = THREE.DoubleSide;
+	this.scene = new THREE.Scene();
+	this.scene.add( this.planeMesh );
+	this.scene.add( this.camera );
+
+	this.shader.uniforms[ 'envMap' ].value = this.sourceTexture;
+	this.shader.envMap = this.sourceTexture;
+
+};
+
+THREE.PMREMGenerator.prototype = {
+
+	constructor: THREE.PMREMGenerator,
+
+	/*
+	 * Prashant Sharma / spidersharma03: More thought and work is needed here.
+	 * Right now it's a kind of a hack to use the previously convolved map to convolve the current one.
+	 * I tried to use the original map to convolve all the lods, but for many textures(specially the high frequency)
+	 * even a high number of samples(1024) dosen't lead to satisfactory results.
+	 * By using the previous convolved maps, a lower number of samples are generally sufficient(right now 32, which
+	 * gives okay results unless we see the reflection very carefully, or zoom in too much), however the math
+	 * goes wrong as the distribution function tries to sample a larger area than what it should be. So I simply scaled
+	 * the roughness by 0.9(totally empirical) to try to visually match the original result.
+	 * The condition "if(i <5)" is also an attemt to make the result match the original result.
+	 * This method requires the most amount of thinking I guess. Here is a paper which we could try to implement in future::
+	 * http://http.developer.nvidia.com/GPUGems3/gpugems3_ch20.html
+	 */
+	update: function ( renderer ) {
+
+		this.shader.uniforms[ 'envMap' ].value = this.sourceTexture;
+		this.shader.envMap = this.sourceTexture;
+
+		var gammaInput = renderer.gammaInput;
+		var gammaOutput = renderer.gammaOutput;
+		var toneMapping = renderer.toneMapping;
+		var toneMappingExposure = renderer.toneMappingExposure;
+		var currentRenderTarget = renderer.getRenderTarget();
+
+		renderer.toneMapping = THREE.LinearToneMapping;
+		renderer.toneMappingExposure = 1.0;
+		renderer.gammaInput = false;
+		renderer.gammaOutput = false;
+
+		for ( var i = 0; i < this.numLods; i ++ ) {
+
+			var r = i / ( this.numLods - 1 );
+			this.shader.uniforms[ 'roughness' ].value = r * 0.9; // see comment above, pragmatic choice
+			this.shader.uniforms[ 'queryScale' ].value.x = ( i == 0 ) ? - 1 : 1;
+			var size = this.cubeLods[ i ].width;
+			this.shader.uniforms[ 'mapSize' ].value = size;
+			this.renderToCubeMapTarget( renderer, this.cubeLods[ i ] );
+
+			if ( i < 5 ) this.shader.uniforms[ 'envMap' ].value = this.cubeLods[ i ].texture;
+
+		}
+
+		renderer.setRenderTarget( currentRenderTarget );
+		renderer.toneMapping = toneMapping;
+		renderer.toneMappingExposure = toneMappingExposure;
+		renderer.gammaInput = gammaInput;
+		renderer.gammaOutput = gammaOutput;
+
+	},
+
+	renderToCubeMapTarget: function ( renderer, renderTarget ) {
+
+		for ( var i = 0; i < 6; i ++ ) {
+
+			this.renderToCubeMapTargetFace( renderer, renderTarget, i );
+
+		}
+
+	},
+
+	renderToCubeMapTargetFace: function ( renderer, renderTarget, faceIndex ) {
+
+		renderTarget.activeCubeFace = faceIndex;
+		this.shader.uniforms[ 'faceIndex' ].value = faceIndex;
+		renderer.render( this.scene, this.camera, renderTarget, true );
+
+	},
+
+	getShader: function () {
+
+		var shaderMaterial = new THREE.ShaderMaterial( {
+
+			defines: {
+				"SAMPLES_PER_LEVEL": 20,
+			},
+
+			uniforms: {
+				"faceIndex": { value: 0 },
+				"roughness": { value: 0.5 },
+				"mapSize": { value: 0.5 },
+				"envMap": { value: null },
+				"queryScale": { value: new THREE.Vector3( 1, 1, 1 ) },
+				"testColor": { value: new THREE.Vector3( 1, 1, 1 ) },
+			},
+
+			vertexShader:
+				"varying vec2 vUv;\n\
+				void main() {\n\
+					vUv = uv;\n\
+					gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n\
+				}",
+
+			fragmentShader:
+				"#include <common>\n\
+				varying vec2 vUv;\n\
+				uniform int faceIndex;\n\
+				uniform float roughness;\n\
+				uniform samplerCube envMap;\n\
+				uniform float mapSize;\n\
+				uniform vec3 testColor;\n\
+				uniform vec3 queryScale;\n\
+				\n\
+				float GGXRoughnessToBlinnExponent( const in float ggxRoughness ) {\n\
+					float a = ggxRoughness + 0.0001;\n\
+					a *= a;\n\
+					return ( 2.0 / a - 2.0 );\n\
+				}\n\
+				vec3 ImportanceSamplePhong(vec2 uv, mat3 vecSpace, float specPow) {\n\
+					float phi = uv.y * 2.0 * PI;\n\
+					float cosTheta = pow(1.0 - uv.x, 1.0 / (specPow + 1.0));\n\
+					float sinTheta = sqrt(1.0 - cosTheta * cosTheta);\n\
+					vec3 sampleDir = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);\n\
+					return vecSpace * sampleDir;\n\
+				}\n\
+				vec3 ImportanceSampleGGX( vec2 uv, mat3 vecSpace, float Roughness )\n\
+				{\n\
+					float a = Roughness * Roughness;\n\
+					float Phi = 2.0 * PI * uv.x;\n\
+					float CosTheta = sqrt( (1.0 - uv.y) / ( 1.0 + (a*a - 1.0) * uv.y ) );\n\
+					float SinTheta = sqrt( 1.0 - CosTheta * CosTheta );\n\
+					return vecSpace * vec3(SinTheta * cos( Phi ), SinTheta * sin( Phi ), CosTheta);\n\
+				}\n\
+				mat3 matrixFromVector(vec3 n) {\n\
+					float a = 1.0 / (1.0 + n.z);\n\
+					float b = -n.x * n.y * a;\n\
+					vec3 b1 = vec3(1.0 - n.x * n.x * a, b, -n.x);\n\
+					vec3 b2 = vec3(b, 1.0 - n.y * n.y * a, -n.y);\n\
+					return mat3(b1, b2, n);\n\
+				}\n\
+				\n\
+				vec4 testColorMap(float Roughness) {\n\
+					vec4 color;\n\
+					if(faceIndex == 0)\n\
+						color = vec4(1.0,0.0,0.0,1.0);\n\
+					else if(faceIndex == 1)\n\
+						color = vec4(0.0,1.0,0.0,1.0);\n\
+					else if(faceIndex == 2)\n\
+						color = vec4(0.0,0.0,1.0,1.0);\n\
+					else if(faceIndex == 3)\n\
+						color = vec4(1.0,1.0,0.0,1.0);\n\
+					else if(faceIndex == 4)\n\
+						color = vec4(0.0,1.0,1.0,1.0);\n\
+					else\n\
+						color = vec4(1.0,0.0,1.0,1.0);\n\
+					color *= ( 1.0 - Roughness );\n\
+					return color;\n\
+				}\n\
+				void main() {\n\
+					vec3 sampleDirection;\n\
+					vec2 uv = vUv*2.0 - 1.0;\n\
+					float offset = -1.0/mapSize;\n\
+					const float a = -1.0;\n\
+					const float b = 1.0;\n\
+					float c = -1.0 + offset;\n\
+					float d = 1.0 - offset;\n\
+					float bminusa = b - a;\n\
+					uv.x = (uv.x - a)/bminusa * d - (uv.x - b)/bminusa * c;\n\
+					uv.y = (uv.y - a)/bminusa * d - (uv.y - b)/bminusa * c;\n\
+					if (faceIndex==0) {\n\
+						sampleDirection = vec3(1.0, -uv.y, -uv.x);\n\
+					} else if (faceIndex==1) {\n\
+						sampleDirection = vec3(-1.0, -uv.y, uv.x);\n\
+					} else if (faceIndex==2) {\n\
+						sampleDirection = vec3(uv.x, 1.0, uv.y);\n\
+					} else if (faceIndex==3) {\n\
+						sampleDirection = vec3(uv.x, -1.0, -uv.y);\n\
+					} else if (faceIndex==4) {\n\
+						sampleDirection = vec3(uv.x, -uv.y, 1.0);\n\
+					} else {\n\
+						sampleDirection = vec3(-uv.x, -uv.y, -1.0);\n\
+					}\n\
+					mat3 vecSpace = matrixFromVector(normalize(sampleDirection * queryScale));\n\
+					vec3 rgbColor = vec3(0.0);\n\
+					const int NumSamples = SAMPLES_PER_LEVEL;\n\
+					vec3 vect;\n\
+					float weight = 0.0;\n\
+					for( int i = 0; i < NumSamples; i ++ ) {\n\
+						float sini = sin(float(i));\n\
+						float cosi = cos(float(i));\n\
+						float r = rand(vec2(sini, cosi));\n\
+						vect = ImportanceSampleGGX(vec2(float(i) / float(NumSamples), r), vecSpace, roughness);\n\
+						float dotProd = dot(vect, normalize(sampleDirection));\n\
+						weight += dotProd;\n\
+						vec3 color = envMapTexelToLinear(textureCube(envMap,vect)).rgb;\n\
+						rgbColor.rgb += color;\n\
+					}\n\
+					rgbColor /= float(NumSamples);\n\
+					//rgbColor = testColorMap( roughness ).rgb;\n\
+					gl_FragColor = linearToOutputTexel( vec4( rgbColor, 1.0 ) );\n\
+				}",
+
+			blending: THREE.NoBlending
+
+		} );
+
+		shaderMaterial.type = 'PMREMGenerator';
+
+		return shaderMaterial;
+
+	},
+
+	dispose: function () {
+
+		for ( var i = 0, l = this.cubeLods.length; i < l; i ++ ) {
+
+			this.cubeLods[ i ].dispose();
+
+		}
+
+		this.planeMesh.geometry.dispose();
+		this.planeMesh.material.dispose();
+
+	}
+
+};
+
+/**
+ * @author Prashant Sharma / spidersharma03
+ * @author Ben Houston / bhouston, https://clara.io
+ *
+ * This class takes the cube lods(corresponding to different roughness values), and creates a single cubeUV
+ * Texture. The format for a given roughness set of faces is simply::
+ * +X+Y+Z
+ * -X-Y-Z
+ * For every roughness a mip map chain is also saved, which is essential to remove the texture artifacts due to
+ * minification.
+ * Right now for every face a PlaneMesh is drawn, which leads to a lot of geometry draw calls, but can be replaced
+ * later by drawing a single buffer and by sending the appropriate faceIndex via vertex attributes.
+ * The arrangement of the faces is fixed, as assuming this arrangement, the sampling function has been written.
+ */
+
+THREE.PMREMCubeUVPacker = function ( cubeTextureLods ) {
+
+	this.cubeLods = cubeTextureLods;
+	var size = cubeTextureLods[ 0 ].width * (Math.random() * 5) + 2;
+
+	var sourceTexture = cubeTextureLods[ 0 ].texture;
+	var params = {
+		format: sourceTexture.format,
+		magFilter: sourceTexture.magFilter,
+		minFilter: sourceTexture.minFilter,
+		type: sourceTexture.type,
+		generateMipmaps: sourceTexture.generateMipmaps,
+		anisotropy: sourceTexture.anisotropy,
+		encoding: ( sourceTexture.encoding === THREE.RGBEEncoding ) ? THREE.RGBM16Encoding : sourceTexture.encoding
+	};
+
+	if ( params.encoding === THREE.RGBM16Encoding ) {
+
+		params.magFilter = THREE.LinearFilter;
+		params.minFilter = THREE.LinearFilter;
+
+	}
+
+	this.CubeUVRenderTarget = new THREE.WebGLRenderTarget( size, size, params );
+	this.CubeUVRenderTarget.texture.name = "PMREMCubeUVPacker.cubeUv";
+	this.CubeUVRenderTarget.texture.mapping = THREE.CubeUVReflectionMapping;
+	this.camera = new THREE.OrthographicCamera( - size * 1.5, size * 1.5, - size * 0.5, size * 0.5, 0, 1 ); // top and bottom are swapped for some reason?
+
+	this.scene = new THREE.Scene();
+
+	this.objects = [];
+
+	var geometry = new THREE.PlaneBufferGeometry( 1, 1 );
+
+	var faceOffsets = [];
+	faceOffsets.push( new THREE.Vector2( 0, 0 ) );
+	faceOffsets.push( new THREE.Vector2( 1, 0 ) );
+	faceOffsets.push( new THREE.Vector2( 2, 0 ) );
+	faceOffsets.push( new THREE.Vector2( 0, 1 ) );
+	faceOffsets.push( new THREE.Vector2( 1, 1 ) );
+	faceOffsets.push( new THREE.Vector2( 2, 1 ) );
+
+	var textureResolution = size;
+	size = cubeTextureLods[ 0 ].width;
+
+	var offset2 = 0;
+	var c = 14.0;
+	this.numLods = Math.log( cubeTextureLods[ 0 ].width ) / Math.log( 2 ) - 2; // IE11 doesn't support Math.log2
+	for ( var i = 0; i < this.numLods; i ++ ) {
+
+		var offset1 = ( textureResolution - textureResolution / c ) * 0.5;
+		if ( size > 16 ) c *= 2;
+		var nMips = size > 16 ? 6 : 1;
+		var mipOffsetX = 0;
+		var mipOffsetY = 0;
+		var mipSize = size;
+
+		for ( var j = 0; j < nMips; j ++ ) {
+
+			// Mip Maps
+			for ( var k = 0; k < 6; k ++ ) {
+
+				// 6 Cube Faces
+				var material = this.getShader();
+				material.uniforms[ 'envMap' ].value = this.cubeLods[ i ].texture;
+				material.envMap = this.cubeLods[ i ].texture;
+				material.uniforms[ 'faceIndex' ].value = k;
+				material.uniforms[ 'mapSize' ].value = mipSize;
+
+				var planeMesh = new THREE.Mesh( geometry, material );
+				planeMesh.position.x = faceOffsets[ k ].x * mipSize - offset1 + mipOffsetX;
+				planeMesh.position.y = faceOffsets[ k ].y * mipSize - offset1 + offset2 + mipOffsetY;
+				planeMesh.material.side = THREE.BackSide;
+				planeMesh.scale.setScalar( mipSize );
+				this.scene.add( planeMesh );
+				this.objects.push( planeMesh );
+
+			}
+			mipOffsetY += 1.75 * mipSize;
+			mipOffsetX += 1.25 * mipSize;
+			mipSize /= 2;
+
+		}
+		offset2 += 2 * size;
+		if ( size > 16 ) size /= 2;
+
+	}
+
+};
+
+THREE.PMREMCubeUVPacker.prototype = {
+
+	constructor: THREE.PMREMCubeUVPacker,
+
+	update: function ( renderer ) {
+
+		var gammaInput = renderer.gammaInput;
+		var gammaOutput = renderer.gammaOutput;
+		var toneMapping = renderer.toneMapping;
+		var toneMappingExposure = renderer.toneMappingExposure;
+		var currentRenderTarget = renderer.getRenderTarget();
+
+		renderer.gammaInput = false;
+		renderer.gammaOutput = false;
+		renderer.toneMapping = THREE.LinearToneMapping;
+		renderer.toneMappingExposure = 4.0;
+		renderer.render( this.scene, this.camera, this.CubeUVRenderTarget, false );
+
+		renderer.setRenderTarget( currentRenderTarget );
+		renderer.toneMapping = toneMapping;
+		renderer.toneMappingExposure = toneMappingExposure;
+		renderer.gammaInput = gammaInput;
+		renderer.gammaOutput = gammaOutput;
+
+	},
+
+	getShader: function () {
+
+		var shaderMaterial = new THREE.ShaderMaterial( {
+
+			uniforms: {
+				"faceIndex": { value: 0 },
+				"mapSize": { value: 0 },
+				"envMap": { value: null },
+				"testColor": { value: new THREE.Vector3( 1, 1, 1 ) }
+			},
+
+			vertexShader:
+				"precision highp float;\
+				varying vec2 vUv;\
+				void main() {\
+					vUv = uv;\
+					gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\
+				}",
+
+			fragmentShader:
+				"precision highp float;\
+				varying vec2 vUv;\
+				uniform samplerCube envMap;\
+				uniform float mapSize;\
+				uniform vec3 testColor;\
+				uniform int faceIndex;\
+				\
+				void main() {\
+					vec3 sampleDirection;\
+					vec2 uv = vUv;\
+					uv = uv * 2.0 - 1.0;\
+					uv.y *= -1.0;\
+					if(faceIndex == 0) {\
+						sampleDirection = normalize(vec3(1.0, uv.y, -uv.x));\
+					} else if(faceIndex == 1) {\
+						sampleDirection = normalize(vec3(uv.x, 1.0, uv.y));\
+					} else if(faceIndex == 2) {\
+						sampleDirection = normalize(vec3(uv.x, uv.y, 1.0));\
+					} else if(faceIndex == 3) {\
+						sampleDirection = normalize(vec3(-1.0, uv.y, uv.x));\
+					} else if(faceIndex == 4) {\
+						sampleDirection = normalize(vec3(uv.x, -1.0, -uv.y));\
+					} else {\
+						sampleDirection = normalize(vec3(-uv.x, uv.y, -1.0));\
+					}\
+					vec4 color = envMapTexelToLinear( textureCube( envMap, sampleDirection ) );\
+					gl_FragColor = linearToOutputTexel( color );\
+				}",
+
+			blending: THREE.NoBlending
+
+		} );
+
+		shaderMaterial.type = 'PMREMCubeUVPacker';
+
+		return shaderMaterial;
+
+	},
+
+	dispose: function () {
+
+		for ( var i = 0, l = this.objects.length; i < l; i ++ ) {
+
+			this.objects[ i ].material.dispose();
+
+		}
+
+		this.objects[ 0 ].geometry.dispose();
+
+	}
+
+};
+</script>  
